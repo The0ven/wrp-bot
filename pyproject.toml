@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "wrp-bot"
+version = "0.1.0"
+description = ""
+authors = ["The0ven"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "3.11.9"
+discord = "^2.3.2"
+python-dotenv = "^1.0.1"
+pandas = "^2.2.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
