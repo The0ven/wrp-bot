@@ -56,8 +56,7 @@ class Initialize(View):
 
 class AddCalendar(Modal, title="Create/Update Calendar"):
     name = TextInput(label="Calendar Name", style=TextStyle.short)
-    key = TextInput(label="A unique identifier for your calendar", style=TextStyle.short)
-    acronym = TextInput(label="Acronym", style=TextStyle.short)
+    key = TextInput(label="Calendar acronym (EG: Staff Years -> sy)", style=TextStyle.short)
     current_year = TextInput(label="Current Year", style=TextStyle.short)
     hours_per_year = TextInput(label="Hours Per Year", style=TextStyle.short)
     is_staff_years = TextInput(label="Is Staff Years (Y/N)", style=TextStyle.short)
@@ -68,7 +67,7 @@ class AddCalendar(Modal, title="Create/Update Calendar"):
         # overwrite old version of calendar
         config["calendars"] = [cal for cal in config["calendars"] if cal["name"] != self.name.value]
         # add new entry
-        config["calendars"].append({"name": self.name.value, "key": self.key.value, "acronym": self.acronym.value, "hours_per_year": float(self.hours_per_year.value), "current_year": int(self.current_year.value), "is_staff_years": True if self.is_staff_years.value.lower() == "Y".lower() else False})
+        config["calendars"].append({"name": self.name.value, "key": self.key.value, "hours_per_year": float(self.hours_per_year.value), "current_year": int(self.current_year.value), "is_staff_years": True if self.is_staff_years.value.lower() == "Y".lower() else False})
         with open("config.json", mode="w", encoding="utf-8") as wb:
             json.dump(config, wb)
         await interaction.response.send_message(f"Created {self.name.value}, with years every {self.hours_per_year.value} hours. The starting year (right now) is {self.current_year.value}")
