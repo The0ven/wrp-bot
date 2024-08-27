@@ -14,14 +14,15 @@ import json
 load_dotenv()
 
 def compute_years(last_entry, calendars):
-    ts = time()
+    ts = dt.fromtimestamp(time())
     out = {"timestamp": ts}
-    td = last_entry["timestamp"] - dt.fromtimestamp(ts)
+    td = abs((last_entry["timestamp"] - ts).total_seconds())
     for cal in calendars:
         if cal["key"] in last_entry:
             # calculate year delta from timestamps. years transposed to seconds via hrs/yr config
-            td = td / (cal['hours_per_year'] * 60)
-            out[cal["key"]] = last_entry[cal["key"]] + td.total_seconds()
+            td = td / timedelta(hours=cal['hours_per_year']).total_seconds()
+            print(td)
+            out[cal["key"]] = last_entry[cal["key"]] + td
         else:
             out[cal["key"]] = cal["current_year"]
     return out
@@ -49,7 +50,7 @@ class WRPClient(discord.Client):
 
 client = WRPClient()
 
-@tasks.loop(minutes=1)
+@tasks.loop(minutes=30)
 async def new_year():
     with open('config.json', mode='r') as rb:
         config = json.load(rb)
@@ -57,15 +58,17 @@ async def new_year():
     sy = [cal for cal in config['calendars'] if cal['is_staff_years'] == True][0]
     entry = None
 
-    try:
+    if os.path.exists('history.jsonl'):
         df = pd.read_json('history.jsonl', lines=True)
-        if df['timestamp'].iat[-1] - dt.fromtimestamp(time()) > timedelta(hours=sy["hours_per_year"]):
+        delta = df['timestamp'].iat[-1] - dt.fromtimestamp(time())
+        print(f"{df['timestamp'].iat[-1]}, {abs(delta.total_seconds() / 60):.2f}, {timedelta(hours=sy['hours_per_year']).total_seconds() / 60:.2f}")
+        if abs(delta) > timedelta(hours=sy["hours_per_year"]):
             entry = compute_years(df.to_dict("records")[-1], config['calendars'])
             df.loc[len(df.index)] = entry
         else:
             df = None
-    except Exception as e:
-        entry = compute_years({"timestamp": time()}, config['calendars'])
+    else:
+        entry = compute_years({"timestamp": dt.fromtimestamp(time())}, config['calendars'])
         df = pd.DataFrame([entry])
     if df is not None and sy is not None and entry is not None:
         df.to_json('history.jsonl', orient="records", lines=True)
@@ -97,22 +100,30 @@ async def add_calendar(interaction: discord.Interaction):
     description="get a calendar year for a given real day."
 )
 async def get_year(inter: discord.Interaction, day: str, calendar: Optional[str]):
+    arg_calendar = calendar
     df = pd.read_json('history.jsonl', lines=True)
     with open('config.json', mode='r') as rb:
         config = json.load(rb)
     target_day = dt.strptime(day, "%Y-%m-%d")
+    print(f"target_day: {target_day.timestamp()}")
 
-    i = np.argmin(np.abs(pd.to_datetime(df['timestamp']) - target_day))
-
-    years = df.iloc[i]
-
-    if calendar and calendar in years.columns:
-        cal = years[calendar]
-        cal_conf = [c for c in config['calendars'] if c['key'] == calendar][0]
-        await inter.response.send_message(f"On {day} it was {cal} {acronym(cal_conf['key'])}")
+    if target_day < df['timestamp'].iat[0]:
+        await inter.response.send_message(f"Sorry, {day} is before the calendar recording began.")
+    elif target_day > df['timestamp'].iat[0]:
+        await inter.response.send_message(f"Sorry, {day} is in the future or has not been recorded yet.")
     else:
-        msgs = "\n".join([f"{years[calendar]} {acronym(cal_conf['key'])}" for cal_conf in config['calendars']])
-        await inter.response.send_message(f"**On {day} it was:**\n{msgs}")
+        i = np.argmin(np.abs(df['timestamp'] - target_day))
+
+        years = df.iloc[i]
+        print(f"closest_entry: {years['timestamp'].timestamp()}")
+
+        if arg_calendar is not None and arg_calendar in years.columns:
+            cal_year = years[arg_calendar]
+            cal_conf = [conf_cal for conf_cal in config['calendars'] if conf_cal['key'] == arg_calendar][0]
+            await inter.response.send_message(f"On {day} it was {cal_year} {acronym(cal_conf['key'])}")
+        else:
+            msgs = "\n".join([f"{years[conf_cal['key']]:.0f} {acronym(conf_cal['key'])}" for conf_cal in config['calendars']])
+            await inter.response.send_message(f"**On {day} it was:**\n{msgs}")
 
 
 
