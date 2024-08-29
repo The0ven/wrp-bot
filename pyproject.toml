@@ -6,7 +6,7 @@ authors = ["The0ven"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "3.11.9"
+python = "^3.11"
 discord = "^2.3.2"
 python-dotenv = "^1.0.1"
 pandas = "^2.2.2"
