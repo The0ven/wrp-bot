@@ -61,7 +61,7 @@ async def new_year():
     if os.path.exists('history.jsonl'):
         df = pd.read_json('history.jsonl', lines=True)
         delta = df['timestamp'].iat[-1] - dt.fromtimestamp(time())
-        print(f"{df['timestamp'].iat[-1]}, {abs(delta.total_seconds() / 60):.2f}, {timedelta(hours=sy['hours_per_year']).total_seconds() / 60:.2f}")
+        print(f"{df['timestamp'].iat[-1]}, time_since_last: {abs(delta.total_seconds() / 60):.2f}, delta_threshold_sy: {timedelta(hours=sy['hours_per_year']).total_seconds() / 60:.2f}, delta_threshold_min: {timedelta(hours=6).total_seconds() / 60:.2f}")
         if abs(delta) > timedelta(hours=sy["hours_per_year"]):
             entry = compute_years(df.to_dict("records")[-1], config['calendars'])
             df.loc[len(df.index)] = entry
