@@ -16,11 +16,11 @@ load_dotenv()
 def compute_years(last_entry, calendars):
     ts = dt.fromtimestamp(time())
     out = {"timestamp": ts}
-    td = dt.fromtimestamp(last_entry["timestamp"]) - ts
+    td = abs((last_entry["timestamp"] - ts).total_seconds())
     for cal in calendars:
         if cal["key"] in last_entry:
             # calculate year delta from timestamps. years transposed to seconds via hrs/yr config
-            td_f = td.total_seconds() / timedelta(hours=cal['hours_per_year']).total_seconds()
+            td_f = td / timedelta(hours=cal['hours_per_year']).total_seconds()
             print(td_f)
             out[cal["key"]] = last_entry[cal["key"]] + td_f
         else:
