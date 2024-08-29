@@ -66,7 +66,10 @@ async def new_year():
             entry = compute_years(df.to_dict("records")[-1], config['calendars'])
             df.loc[len(df.index)] = entry
         elif abs(delta) > timedelta(hours=6):
+            entry = compute_years(df.to_dict("records")[-1], config['calendars'])
+            df.loc[len(df.index)] = entry
             df.to_json('history.jsonl', orient="records", lines=True)
+            df = None
         else:
             df = None
     else:
