@@ -112,23 +112,23 @@ async def get_year(inter: discord.Interaction, day: str, calendar: Optional[str]
     target_day = dt.strptime(day, "%Y-%m-%d")
     print(f"target_day: {target_day.timestamp()}")
 
-    if target_day < df['timestamp'].iat[0]:
-        await inter.response.send_message(f"Sorry, {day} is before the calendar recording began.")
-    elif target_day > df['timestamp'].iat[0]:
-        await inter.response.send_message(f"Sorry, {day} is in the future or has not been recorded yet.")
+    # if target_day < df['timestamp'].iat[0]:
+    #     await inter.response.send_message(f"Sorry, {day} is before the calendar recording began.")
+    # elif target_day > df['timestamp'].iat[-1]:
+    #     await inter.response.send_message(f"Sorry, {day} is in the future or has not been recorded yet.")
+    # else:
+    i = np.argmin(np.abs(df['timestamp'] - target_day))
+
+    years = df.iloc[i]
+    print(f"closest_entry: {years['timestamp'].timestamp()}")
+
+    if arg_calendar is not None and arg_calendar in years.columns:
+        cal_year = years[arg_calendar]
+        cal_conf = [conf_cal for conf_cal in config['calendars'] if conf_cal['key'] == arg_calendar][0]
+        await inter.response.send_message(f"On {day} it was {cal_year} {acronym(cal_conf['key'])}")
     else:
-        i = np.argmin(np.abs(df['timestamp'] - target_day))
-
-        years = df.iloc[i]
-        print(f"closest_entry: {years['timestamp'].timestamp()}")
-
-        if arg_calendar is not None and arg_calendar in years.columns:
-            cal_year = years[arg_calendar]
-            cal_conf = [conf_cal for conf_cal in config['calendars'] if conf_cal['key'] == arg_calendar][0]
-            await inter.response.send_message(f"On {day} it was {cal_year} {acronym(cal_conf['key'])}")
-        else:
-            msgs = "\n".join([f"{years[conf_cal['key']]:.0f} {acronym(conf_cal['key'])}" for conf_cal in config['calendars']])
-            await inter.response.send_message(f"**On {day} it was:**\n{msgs}")
+        msgs = "\n".join([f"{years[conf_cal['key']]:.0f} {acronym(conf_cal['key'])}" for conf_cal in config['calendars']])
+        await inter.response.send_message(f"**On {day} it was:**\n{msgs}")
 
 
 
