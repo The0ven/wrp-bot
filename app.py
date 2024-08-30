@@ -122,10 +122,10 @@ async def get_year(inter: discord.Interaction, day: str, calendar: Optional[str]
     # else:
     i = np.argmin(np.abs(df['timestamp'] - target_day))
 
-    years = df.iloc[i]
+    years: pd.Series = df.iloc[i]
     print(f"closest_entry: {years['timestamp'].timestamp()}")
 
-    if arg_calendar is not None and arg_calendar in years.columns:
+    if arg_calendar is not None and arg_calendar in years.index:
         cal_year = years[arg_calendar]
         cal_conf = [conf_cal for conf_cal in config['calendars'] if conf_cal['key'] == arg_calendar][0]
         await inter.response.send_message(f"On {day} it was {cal_year} {acronym(cal_conf['key'])}")
