@@ -128,7 +128,7 @@ async def get_year(inter: discord.Interaction, day: str, calendar: Optional[str]
     if arg_calendar is not None and arg_calendar in years.index:
         cal_year = years[arg_calendar]
         cal_conf = [conf_cal for conf_cal in config['calendars'] if conf_cal['key'] == arg_calendar][0]
-        await inter.response.send_message(f"On {day} it was {cal_year} {acronym(cal_conf['key'])}")
+        await inter.response.send_message(f"On {day} it was {cal_year:.0f} {acronym(cal_conf['key'])}")
     else:
         msgs = "\n".join([f"{years[conf_cal['key']]:.0f} {acronym(conf_cal['key'])}" for conf_cal in config['calendars']])
         await inter.response.send_message(f"**On {day} it was:**\n{msgs}")
