@@ -1,6 +1,7 @@
 from typing import Optional
 import discord
 import os
+from discord.app_commands import checks
 from discord.enums import ChannelType
 from dotenv import load_dotenv
 from views import AddCalendar, Initialize
@@ -89,6 +90,7 @@ async def before_new_year():
     name="configure",
     description="intialize calendar tracking"
 )
+@checks.has_permissions(administrator=True)
 async def configure(interaction: discord.Interaction):
     if interaction.channel is not None and interaction.channel.type in [ChannelType.text, ChannelType.private, ChannelType.public_thread, ChannelType.private_thread]:
         await interaction.channel.send("Configure The Standard Calendar", view=Initialize())
@@ -97,6 +99,7 @@ async def configure(interaction: discord.Interaction):
     name="add_calendar",
     description="add a calendar"
 )
+@checks.has_permissions(manage_members=True)
 async def add_calendar(interaction: discord.Interaction):
     await interaction.response.send_modal(AddCalendar())
 
