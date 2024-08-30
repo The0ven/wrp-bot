@@ -99,7 +99,7 @@ async def configure(interaction: discord.Interaction):
     name="add_calendar",
     description="add a calendar"
 )
-@checks.has_permissions(manage_members=True)
+@checks.has_permissions(moderate_members=True)
 async def add_calendar(interaction: discord.Interaction):
     await interaction.response.send_modal(AddCalendar())
 
