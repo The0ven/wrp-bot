@@ -46,9 +46,14 @@ class Initialize(View):
     @button(style=discord.ButtonStyle.primary, label="Submit")
     async def submit(self, inter: Interaction[Client], button: Button) -> None:
         try:
+            config = {}
+            with open("config.json", mode="r", encoding="utf-8") as rb:
+                config = json.load(rb)
+            if self.channel:
+                config["channel"] = self.channel.id
             with open("config.json", mode="w", encoding="utf-8") as wb:
-                json.dump({"channel": self.channel.id, "calendars": []}, wb, separators=(',',':'))
-            await inter.response.send_message(f'Configured to send messages in {self.channel}', ephemeral=True)
+                json.dump(config, wb, separators=(',',':'))
+            await inter.response.send_message(f'Configured to send messages in {config['channel']}', ephemeral=True)
             await inter.message.delete(delay=2)
         except AttributeError:  
             await inter.response.send_message(f'Error Submitting: Please ensure you selected all options.', ephemeral=True)
