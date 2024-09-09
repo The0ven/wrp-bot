@@ -14,9 +14,9 @@ import json
 
 load_dotenv()
 
-def compute_years(last_entry, calendars):
+def compute_years(last_entry, calendars, printed):
     ts = dt.fromtimestamp(time())
-    out = {"timestamp": ts}
+    out = {"timestamp": ts, "printed": printed}
     td = abs((last_entry["timestamp"] - ts).total_seconds())
     for cal in calendars:
         if cal["key"] in last_entry:
@@ -62,12 +62,18 @@ async def new_year():
     if os.path.exists('history.jsonl'):
         df = pd.read_json('history.jsonl', lines=True)
         delta = df['timestamp'].iat[-1] - dt.fromtimestamp(time())
-        print(f"{df['timestamp'].iat[-1]}, time_since_last: {abs(delta.total_seconds() / 60):.2f}, delta_threshold_sy: {timedelta(hours=sy['hours_per_year']).total_seconds() / 60:.2f}, delta_threshold_min: {timedelta(hours=6).total_seconds() / 60:.2f}")
-        if abs(delta) >= timedelta(hours=sy["hours_per_year"]):
-            entry = compute_years(df.to_dict("records")[-1], config['calendars'])
+        if "printed" not in df.columns:
+            df["printed"] = None
+        sy_delta = dt.fromtimestamp(0) - dt.fromtimestamp(time())
+        if len(df.dropna(subset=["printed"])) > 1:
+            print(df.dropna(subset=["printed"]))
+            sy_delta = df.dropna(subset=["printed"])['timestamp'].iat[-1] - dt.fromtimestamp(time())
+        print(f"{df['timestamp'].iat[-1]}, time_since_last_save: {abs(delta.total_seconds() / 60):.2f}, time_since_last_print: {abs(sy_delta.total_seconds() / 60):.2f}, delta_threshold_sy: {timedelta(hours=sy['hours_per_year']).total_seconds() / 60:.2f}, delta_threshold_min: {timedelta(hours=6).total_seconds() / 60:.2f}")
+        if abs(sy_delta) >= timedelta(hours=sy["hours_per_year"]):
+            entry = compute_years(df.to_dict("records")[-1], config['calendars'], True)
             df.loc[len(df.index)] = entry
         elif abs(delta) > timedelta(hours=6):
-            entry = compute_years(df.to_dict("records")[-1], config['calendars'])
+            entry = compute_years(df.to_dict("records")[-1], config['calendars'], None)
             df.loc[len(df.index)] = entry
             df.to_json('history.jsonl', orient="records", lines=True)
             df = None
