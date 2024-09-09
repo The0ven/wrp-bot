@@ -86,6 +86,9 @@ async def new_year():
         df.to_json('history.jsonl', orient="records", lines=True)
         channel = config['channel']
         calendars = '\n'.join([f"{c['name']}: {entry[c['key']]:.0f}({acronym(c['key'])})" for c in [cal for cal in config['calendars'] if cal['is_staff_years'] == False]])
+        async for message in client.get_channel(channel).history():
+            if message.author.bot:
+                message.delete()
         await client.get_channel(channel).send(f"# A New Year Has Dawned\n\n**{entry[sy['key']]:.0f} {acronym(sy['key'])}**\n\n{calendars}")
 
 @new_year.before_loop 
