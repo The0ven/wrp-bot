@@ -53,7 +53,7 @@ class Initialize(View):
                 config["channel"] = self.channel.id
             with open("config.json", mode="w", encoding="utf-8") as wb:
                 json.dump(config, wb, separators=(',',':'))
-            await inter.response.send_message(f'Configured to send messages in {config['channel']}', ephemeral=True)
+            await inter.response.send_message(f'Configured to send messages in {config["channel"]}', ephemeral=True)
             await inter.message.delete(delay=2)
         except AttributeError:  
             await inter.response.send_message(f'Error Submitting: Please ensure you selected all options.', ephemeral=True)
