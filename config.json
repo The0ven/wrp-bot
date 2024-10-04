@@ -1,1 +1,36 @@
-{"channel":706171412070793216,"calendars":[{"name":"Staff Years","key":"sy","hours_per_year":48,"current_year":527,"is_staff_years":true},{"name":"After Latvopolis","key":"al","hours_per_year":48,"current_year":632,"is_staff_years":false},{"name":"After Serpents Landing","key":"asl","hours_per_year":48,"current_year":693,"is_staff_years":false},{"name":"Post Bellum Rolken","key":"pbr","current_year":388,"hours_per_year":48,"is_staff_years":false},{"name":"Imperial Calendar","key":"ic","hours_per_year":48,"current_year":2226,"is_staff_years":false},{"name":"Jarifikhayoan Calendar","key":"jc","hours_per_year":48,"current_year":220,"is_staff_years":false},{"name":"Establishment of the Command","key":"hsgo","hours_per_year":48,"current_year":274,"is_staff_years":false},{"name":"After Syncretism","key":"as","hours_per_year":48,"current_year":401,"is_staff_years":false},{"name":"After Commonwealth","key":"ac","hours_per_year":48,"current_year":140,"is_staff_years":false},{"name":"Zanist Year","key":"zy","hours_per_year":48,"current_year":2280,"is_staff_years":false},{"name":"Post-Xap Silatrommi","key":"pxs","hours_per_year":48,"current_year":639,"is_staff_years":false},{"name":"Enemos Galemo","key":"eg","hours_per_year":48,"current_year":726,"is_staff_years":false},{"name":"After the Beginning","key":"hkh","hours_per_year":48,"current_year":4490,"is_staff_years":false},{"name":"After the Marked One","key":"amo","hours_per_year":48,"current_year":86,"is_staff_years":false},{"name":"Rekol Kenjarkean or Since Kenjarkean","key":"rk","hours_per_year":48,"current_year":1008,"is_staff_years":false},{"name":"Regnal Calendar","key":"rc","hours_per_year":24,"current_year":151,"is_staff_years":false},{"name":"Year of Unification","key":"yu","hours_per_year":48,"current_year":20,"is_staff_years":false},{"name":"After Commonwealth","key":"aco","hours_per_year":48,"current_year":212,"is_staff_years":false},{"name":"After Conquest","key":"acn","hours_per_year":48,"current_year":92,"is_staff_years":false},{"name":"After Arrival","key":"aa","hours_per_year":48,"current_year":10109,"is_staff_years":false},{"name":"After Josiah","key":"aj","hours_per_year":48,"current_year":1170,"is_staff_years":false},{"name":"Years After Pashikompa","key":"yap","hours_per_year":48,"current_year":170,"is_staff_years":false},{"name":"Rise of the Gallics","key":"rg","hours_per_year":48,"current_year":254,"is_staff_years":false},{"name":"After Aethrenir","key":"aae","hours_per_year":48,"current_year":1043,"is_staff_years":false},{"name":"Second Era of Unity","key":"se","hours_per_year":48,"current_year":601,"is_staff_years":false},{"name":"After Founding","key":"af","hours_per_year":48,"current_year":208,"is_staff_years":false},{"name":"After the Saviours","key":"ats","hours_per_year":48,"current_year":717,"is_staff_years":false},{"name":"After Lulowice","key":"alu","hours_per_year":48,"current_year":377,"is_staff_years":false},{"name":"After Unification","key":"au","hours_per_year":48,"current_year":14,"is_staff_years":false}]}
+{
+	"channel":1142543965854380064,
+	"calendars":[
+		{"name":"Staff Years","key":"sy","hours_per_year":48,"current_year":527,"is_staff_years":true},
+		{"name":"After Latvopolis","key":"al","hours_per_year":48,"current_year":632,"is_staff_years":false},
+		{"name":"After Serpents Landing","key":"asl","hours_per_year":48,"current_year":693,"is_staff_years":false},
+		{"name":"Post Bellum Rolken","key":"pbr","current_year":388,"hours_per_year":48,"is_staff_years":false},
+		{"name":"Imperial Calendar","key":"ic","hours_per_year":48,"current_year":2226,"is_staff_years":false},
+		{"name":"Jarifikhayoan Calendar","key":"jc","hours_per_year":48,"current_year":220,"is_staff_years":false},
+		{"name":"Establishment of the Command","key":"hsgo","hours_per_year":48,"current_year":274,"is_staff_years":false},
+		{"name":"After Syncretism","key":"as","hours_per_year":48,"current_year":401,"is_staff_years":false},
+		{"name":"After Commonwealth","key":"ac","hours_per_year":48,"current_year":140,"is_staff_years":false},
+		{"name":"Zanist Year","key":"zy","hours_per_year":48,"current_year":2280,"is_staff_years":false},
+		{"name":"Post-Xap Silatrommi","key":"pxs","hours_per_year":48,"current_year":639,"is_staff_years":false},
+		{"name":"Enemos Galemo","key":"eg","hours_per_year":48,"current_year":726,"is_staff_years":false},
+		{"name":"After the Beginning","key":"hkh","hours_per_year":48,"current_year":4490,"is_staff_years":false},
+		{"name":"After the Marked One","key":"amo","hours_per_year":48,"current_year":86,"is_staff_years":false},
+		{"name":"Rekol Kenjarkean or Since Kenjarkean","key":"rk","hours_per_year":48,"current_year":1008,"is_staff_years":false},
+		{"name":"Regnal Calendar","key":"rc","hours_per_year":24,"current_year":151,"is_staff_years":false},
+		{"name":"Year of Unification","key":"yu","hours_per_year":48,"current_year":20,"is_staff_years":false},
+		{"name":"After Commonwealth","key":"aco","hours_per_year":48,"current_year":212,"is_staff_years":false},
+		{"name":"After Conquest","key":"acn","hours_per_year":48,"current_year":92,"is_staff_years":false},
+		{"name":"After Arrival","key":"aa","hours_per_year":48,"current_year":10109,"is_staff_years":false},
+		{"name":"After Josiah","key":"aj","hours_per_year":48,"current_year":1170,"is_staff_years":false},
+		{"name":"Years After Pashikompa","key":"yap","hours_per_year":48,"current_year":170,"is_staff_years":false},
+		{"name":"Rise of the Gallics","key":"rg","hours_per_year":48,"current_year":254,"is_staff_years":false},
+		{"name":"After Aethrenir","key":"aae","hours_per_year":48,"current_year":1043,"is_staff_years":false},
+		{"name":"Second Era of Unity","key":"se","hours_per_year":48,"current_year":601,"is_staff_years":false},
+		{"name":"After Founding","key":"af","hours_per_year":48,"current_year":208,"is_staff_years":false},
+		{"name":"After the Saviours","key":"ats","hours_per_year":48,"current_year":717,"is_staff_years":false},
+		{"name":"After Lulowice","key":"alu","hours_per_year":48,"current_year":377,"is_staff_years":false},
+		{"name":"After Unification","key":"au","hours_per_year":48,"current_year":14,"is_staff_years":false},
+		{"name":"After Birth","key":"ab","hours_per_year":48,"current_year":166,"is_staff_years":false},
+		{"name":"Velstran Calendrier","key":"vc","hours_per_year":48,"current_year":1875,"is_staff_years":false}
+	]
+}
