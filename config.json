@@ -31,6 +31,7 @@
 		{"name":"After Lulowice","key":"alu","hours_per_year":48,"current_year":377,"is_staff_years":false},
 		{"name":"After Unification","key":"au","hours_per_year":48,"current_year":14,"is_staff_years":false},
 		{"name":"After Birth","key":"ab","hours_per_year":48,"current_year":166,"is_staff_years":false},
-		{"name":"Velstran Calendrier","key":"vc","hours_per_year":48,"current_year":1875,"is_staff_years":false}
+		{"name":"Velstran Calendrier","key":"vc","hours_per_year":48,"current_year":1875,"is_staff_years":false},
+		{"name":"Morian Calendar","key":"mc","hours_per_year":48,"current_year":444,"is_staff_years":false}
 	]
 }
