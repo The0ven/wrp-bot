@@ -72,7 +72,7 @@ async def new_year():
             print('  '.join([f"{k}: {v}" for k,v in dropped_df.iloc[-1].items()]))
             sy_delta = dropped_df['timestamp'].iat[-1] - dt.fromtimestamp(time())
         print(f"{df['timestamp'].iat[-1]}, time_since_last_save: {abs(delta.total_seconds() / 60):.2f}, time_since_last_print: {abs(sy_delta.total_seconds() / 60):.2f}, delta_threshold_sy: {timedelta(hours=sy['hours_per_year']).total_seconds() / 60:.2f}, delta_threshold_min: {timedelta(hours=6).total_seconds() / 60:.2f}")
-        if abs(sy_delta) >= timedelta(hours=sy["hours_per_year"]) or True:
+        if abs(sy_delta) >= timedelta(hours=sy["hours_per_year"]):
             entry = compute_years(df.to_dict("records")[-1], config['calendars'], True)
             df = pd.concat([df, pd.DataFrame([entry])])
             print(df.tail(2))
