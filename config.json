@@ -6,7 +6,6 @@
 		{"name":"After Serpents Landing","key":"asl","hours_per_year":48,"current_year":693,"is_staff_years":false},
 		{"name":"Post Bellum Rolken","key":"pbr","current_year":388,"hours_per_year":48,"is_staff_years":false},
 		{"name":"Imperial Calendar","key":"ic","hours_per_year":48,"current_year":2226,"is_staff_years":false},
-		{"name":"Jarifikhayoan Calendar","key":"jc","hours_per_year":48,"current_year":220,"is_staff_years":false},
 		{"name":"Establishment of the Command","key":"hsgo","hours_per_year":48,"current_year":274,"is_staff_years":false},
 		{"name":"After Syncretism","key":"as","hours_per_year":48,"current_year":401,"is_staff_years":false},
 		{"name":"After Commonwealth","key":"ac","hours_per_year":48,"current_year":140,"is_staff_years":false},
@@ -32,6 +31,7 @@
 		{"name":"After Unification","key":"au","hours_per_year":48,"current_year":14,"is_staff_years":false},
 		{"name":"After Birth","key":"ab","hours_per_year":48,"current_year":173,"is_staff_years":false},
 		{"name":"Velstran Calendrier","key":"vc","hours_per_year":48,"current_year":1882,"is_staff_years":false},
-		{"name":"Morian Calendar","key":"mc","hours_per_year":48,"current_year":451,"is_staff_years":false}
+		{"name":"Morian Calendar","key":"mc","hours_per_year":48,"current_year":451,"is_staff_years":false},
+        {"name":"After The Acension","key":"ata","hours_per_year":24,"current_year":2867,"is_staff_years":false}
 	]
 }
