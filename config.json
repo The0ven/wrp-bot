@@ -17,7 +17,7 @@
 		{"name":"Rekol Kenjarkean or Since Kenjarkean","key":"rk","hours_per_year":96,"current_year":1008,"is_staff_years":false},
 		{"name":"Regnal Calendar","key":"rc","hours_per_year":48,"current_year":151,"is_staff_years":false},
 		{"name":"Year of Unification","key":"yu","hours_per_year":96,"current_year":20,"is_staff_years":false},
-		{"name":"After Commonwealth","key":"aco","hours_per_year":96,"current_year":212,"is_staff_years":false},
+		{"name":"Year After Liberation","key":"yal","hours_per_year":96,"current_year":5,"is_staff_years":false},
 		{"name":"After Conquest","key":"acn","hours_per_year":96,"current_year":92,"is_staff_years":false},
 		{"name":"After Arrival","key":"aa","hours_per_year":96,"current_year":10109,"is_staff_years":false},
 		{"name":"After Josiah","key":"aj","hours_per_year":96,"current_year":1170,"is_staff_years":false},
@@ -36,5 +36,6 @@
 		{"name":"After Descent","key":"ad","hours_per_year":48,"current_year":19,"is_staff_years":false},
 		{"name":"Somudrojatra Anontor","key":"sa","hours_per_year":96,"current_year":72,"is_staff_years":false},
 		{"name":"Taqwhaist Calendar","key":"tc","hours_per_year":730,"current_year":564,"is_staff_years":false}
+
 	]
 }
