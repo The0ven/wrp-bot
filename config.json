@@ -35,7 +35,8 @@
         	{"name":"After The Acension","key":"ata","hours_per_year":48,"current_year":2867,"is_staff_years":false},
 		{"name":"After Descent","key":"ad","hours_per_year":48,"current_year":19,"is_staff_years":false},
 		{"name":"Somudrojatra Anontor","key":"sa","hours_per_year":96,"current_year":72,"is_staff_years":false},
-		{"name":"Taqwhaist Calendar","key":"tc","hours_per_year":730,"current_year":564,"is_staff_years":false}
+		{"name":"Taqwhaist Calendar","key":"tc","hours_per_year":730,"current_year":564,"is_staff_years":false},
+		{"name":"Regno's Record","key":"rr","hours_per_year":96,"current_year":22,"is_staff_years":false}
 
 	]
 }
