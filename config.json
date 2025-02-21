@@ -2,6 +2,7 @@
 	"channel":1142543965854380064,
 	"calendars":[
 		{"name":"Staff Years","key":"sy","hours_per_year":96,"current_year":527,"is_staff_years":true},
+		{"name":"Tech Years","key":"ty","hours_per_year":48,"current_year":1178,"is_staff_years":false},
 		{"name":"After Latvopolis","key":"al","hours_per_year":96,"current_year":632,"is_staff_years":false},
 		{"name":"After Serpents Landing","key":"asl","hours_per_year":96,"current_year":693,"is_staff_years":false},
 		{"name":"Post Bellum Rolken","key":"pbr","current_year":388,"hours_per_year":96,"is_staff_years":false},
@@ -36,7 +37,8 @@
 		{"name":"After Descent","key":"ad","hours_per_year":48,"current_year":19,"is_staff_years":false},
 		{"name":"Somudrojatra Anontor","key":"sa","hours_per_year":96,"current_year":72,"is_staff_years":false},
 		{"name":"Taqwhaist Calendar","key":"tc","hours_per_year":730,"current_year":564,"is_staff_years":false},
-		{"name":"Regno's Record","key":"rr","hours_per_year":96,"current_year":22,"is_staff_years":false}
+		{"name":"Regno's Record","key":"rr","hours_per_year":96,"current_year":22,"is_staff_years":false},
+		{"name":"After the Star Father's Descent.","key":"ASY","hours_per_year":96,"current_year":1068,"is_staff_years":false}
 
 	]
 }
