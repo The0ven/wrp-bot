@@ -1,7 +1,10 @@
 import discord
-from discord import Button, ChannelType, Interaction, Client, TextStyle
-from discord.ui import ChannelSelect, Modal, Select, TextInput, View, button, select
+from discord import Button, ChannelType, ComponentType, InputTextStyle
+from discord.ui import Modal, View, button, select, channel_select, InputText
 import json
+import uuid
+from datetime import datetime
+from approval_views import ApprovalView, create_approval_embed
 
 # class SubmitButton(ui.Button):
 #     def __init__(self, channel: str, dpy: int, *, style: ButtonStyle = ButtonStyle.secondary, label: Optional[str] = None, disabled: bool = False, custom_id: Optional[str] = None, url: Optional[str] = None, emoji: Optional[Union[str, Emoji, PartialEmoji]] = None, row: Optional[int] = None, sku_id: Optional[int] = None):
@@ -13,12 +16,11 @@ import json
 
 class Initialize(View):
 
-    @select(
-        cls=ChannelSelect,
+    @channel_select(
         placeholder="The channel for sending public year updates.",
         channel_types=[ChannelType.text, ChannelType.private, ChannelType.public_thread, ChannelType.private_thread]
     )
-    async def chose_calendar_channel(self, inter: Interaction[Client], select: ChannelSelect):
+    async def chose_calendar_channel(self, inter: discord.Interaction, select):
         await inter.response.defer()
         self.channel = select.values[0]
 
@@ -44,7 +46,7 @@ class Initialize(View):
     #     self.hours_per_year = int(select.values[0])
 
     @button(style=discord.ButtonStyle.primary, label="Submit")
-    async def submit(self, inter: Interaction[Client], button: Button) -> None:
+    async def submit(self, inter: discord.Interaction, button: Button) -> None:
         try:
             config = {}
             with open("config.json", mode="r", encoding="utf-8") as rb:
@@ -59,22 +61,135 @@ class Initialize(View):
             await inter.response.send_message(f'Error Submitting: Please ensure you selected all options.', ephemeral=True)
 
 
-class AddCalendar(Modal, title="Create/Update Calendar"):
-    name = TextInput(label="Calendar Name", style=TextStyle.short)
-    key = TextInput(label="Calendar acronym (EG: Staff Years -> sy)", style=TextStyle.short)
-    current_year = TextInput(label="Current Year", style=TextStyle.short)
-    hours_per_year = TextInput(label="Hours Per Year", style=TextStyle.short)
-    is_staff_years = TextInput(label="Is Staff Years (Y/N)", style=TextStyle.short)
+class AddCalendar(Modal):
+    title="Create/Update Calendar"
+    children = [
+        InputText(label="Calendar Name", style=InputTextStyle.short),
+        InputText(label="Calendar acronym (EG: Staff Years -> sy)", style=InputTextStyle.short),
+        InputText(label="Current Year", style=InputTextStyle.short),
+        InputText(label="Hours Per Year", style=InputTextStyle.short),
+        InputText(label="Is Staff Years (Y/N)", style=InputTextStyle.short)
+    ]
 
-    async def on_submit(self, interaction: Interaction[Client], /) -> None:
-        with open("config.json", mode="r", encoding="utf-8") as rb:
-            config = json.load(rb)
-        # overwrite old version of calendar
-        config["calendars"] = [cal for cal in config["calendars"] if cal["name"] != self.name.value]
-        # add new entry
-        config["calendars"].append({"name": self.name.value, "key": self.key.value, "hours_per_year": float(self.hours_per_year.value), "current_year": int(self.current_year.value), "is_staff_years": True if self.is_staff_years.value.lower() == "Y".lower() else False})
-        with open("config.json", mode="w", encoding="utf-8") as wb:
-            json.dump(config, wb)
-        await interaction.response.send_message(f"Created {self.name.value}, with years every {self.hours_per_year.value} hours. The starting year (right now) is {self.current_year.value}")
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        try:
+            # Validate input
+            if not self.name.value.strip():
+                await interaction.response.send_message("Calendar name cannot be empty.", ephemeral=True)
+                return
+            
+            if not self.key.value.strip():
+                await interaction.response.send_message("Calendar key cannot be empty.", ephemeral=True)
+                return
+            
+            # Check for duplicate calendar names in existing config
+            with open("config.json", mode="r", encoding="utf-8") as rb:
+                config = json.load(rb)
+            
+            existing_names = [cal["name"] for cal in config["calendars"]]
+            if self.name.value in existing_names:
+                await interaction.response.send_message(f"A calendar with the name '{self.name.value}' already exists.", ephemeral=True)
+                return
+            
+            # Check for duplicate calendar keys
+            existing_keys = [cal["key"] for cal in config["calendars"]]
+            if self.key.value in existing_keys:
+                await interaction.response.send_message(f"A calendar with the key '{self.key.value}' already exists.", ephemeral=True)
+                return
+            
+            # Validate numeric inputs
+            try:
+                hours_per_year = float(self.hours_per_year.value)
+                if hours_per_year <= 0:
+                    await interaction.response.send_message("Hours per year must be a positive number.", ephemeral=True)
+                    return
+            except ValueError:
+                await interaction.response.send_message("Hours per year must be a valid number.", ephemeral=True)
+                return
+            
+            try:
+                current_year = int(self.current_year.value)
+                if current_year < 0:
+                    await interaction.response.send_message("Current year must be a non-negative number.", ephemeral=True)
+                    return
+            except ValueError:
+                await interaction.response.send_message("Current year must be a valid integer.", ephemeral=True)
+                return
+            
+            # Validate is_staff_years input
+            is_staff_years_input = self.is_staff_years.value.lower().strip()
+            if is_staff_years_input not in ['y', 'n', 'yes', 'no']:
+                await interaction.response.send_message("Is Staff Years must be Y/N, Yes/No.", ephemeral=True)
+                return
+            
+            is_staff_years = is_staff_years_input in ['y', 'yes']
+            
+            # Create calendar data
+            calendar_data = {
+                "name": self.name.value.strip(),
+                "key": self.key.value.strip(),
+                "hours_per_year": hours_per_year,
+                "current_year": current_year,
+                "is_staff_years": is_staff_years
+            }
+            
+            # Generate unique submission ID
+            submission_id = str(uuid.uuid4())
+            
+            # Add to pending submissions
+            try:
+                with open("pending_calendars.json", mode="r", encoding="utf-8") as rb:
+                    pending_data = json.load(rb)
+            except FileNotFoundError:
+                pending_data = {"pending_submissions": []}
+            
+            submission = {
+                "submission_id": submission_id,
+                "submitter_id": interaction.user.id,
+                "submitter_name": interaction.user.display_name,
+                "submission_timestamp": datetime.now().isoformat(),
+                "calendar_data": calendar_data
+            }
+            
+            pending_data["pending_submissions"].append(submission)
+            
+            with open("pending_calendars.json", mode="w", encoding="utf-8") as wb:
+                json.dump(pending_data, wb, indent=2)
+            
+            # Send approval request to the designated user (322487124102479873)
+            try:
+                approval_user = await interaction.client.fetch_user(322487124102479873)
+                if approval_user:
+                    embed = create_approval_embed(calendar_data, interaction.user.id, submission_id)
+                    approval_view = ApprovalView(submission_id, calendar_data, interaction.user.id)
+                    await approval_user.send(embed=embed, view=approval_view)
+                else:
+                    # Fallback: send to the channel where the command was used
+                    embed = create_approval_embed(calendar_data, interaction.user.id, submission_id)
+                    approval_view = ApprovalView(submission_id, calendar_data, interaction.user.id)
+                    await interaction.channel.send(embed=embed, view=approval_view)
+            except Exception as e:
+                print(f"Error sending approval request: {e}")
+                # Fallback: send to the channel where the command was used
+                embed = create_approval_embed(calendar_data, interaction.user.id, submission_id)
+                approval_view = ApprovalView(submission_id, calendar_data, interaction.user.id)
+                await interaction.channel.send(embed=embed, view=approval_view)
+            
+            # Send success message to submitter
+            await interaction.response.send_message(
+                f"✅ Calendar submission **{self.name.value}** has been submitted for approval!\n\n"
+                f"**Details:**\n"
+                f"• Name: {self.name.value}\n"
+                f"• Key: {self.key.value}\n"
+                f"• Current Year: {current_year}\n"
+                f"• Hours Per Year: {hours_per_year}\n"
+                f"• Is Staff Years: {'Yes' if is_staff_years else 'No'}\n\n"
+                f"You will be notified when your submission is reviewed.",
+                ephemeral=True
+            )
+            
+        except Exception as e:
+            await interaction.response.send_message(f"Error submitting calendar: {str(e)}", ephemeral=True)
+        
         return await super().on_submit(interaction)
 
