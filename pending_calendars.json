@@ -1,3 +1,17 @@
 {
-  "pending_submissions": []
-} 
+  "pending_submissions": [
+    {
+      "submission_id": "e79972d7-391c-4a25-8d68-2705d89793eb",
+      "submitter_id": 1294666536002392186,
+      "submitter_name": "Apteka Confederation | CL T.Q.R.",
+      "submission_timestamp": "2026-07-27T00:52:27.146263",
+      "calendar_data": {
+        "name": "Before Patria",
+        "key": "AB",
+        "staff_years_per_year": 1.0,
+        "current_year": 3451,
+        "is_staff_years": false
+      }
+    }
+  ]
+}

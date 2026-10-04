@@ -5,6 +5,10 @@ import json
 import uuid
 from datetime import datetime
 from approval_views import ApprovalView, create_approval_embed
+import logging
+from file_locks import CONFIG_LOCK, PENDING_LOCK
+
+logger = logging.getLogger(__name__)
 
 # class SubmitButton(ui.Button):
 #     def __init__(self, channel: str, dpy: int, *, style: ButtonStyle = ButtonStyle.secondary, label: Optional[str] = None, disabled: bool = False, custom_id: Optional[str] = None, url: Optional[str] = None, emoji: Optional[Union[str, Emoji, PartialEmoji]] = None, row: Optional[int] = None, sku_id: Optional[int] = None):
@@ -23,6 +27,11 @@ class Initialize(View):
     async def chose_calendar_channel(self, inter: discord.Interaction, select):
         await inter.response.defer()
         self.channel = select.values[0]
+        logger.info(
+            "Initialize channel selected user_id=%s channel_id=%s",
+            inter.user.id,
+            self.channel.id,
+        )
 
     # @select(
     #     cls=ChannelSelect,
@@ -46,18 +55,26 @@ class Initialize(View):
     #     self.hours_per_year = int(select.values[0])
 
     @button(style=discord.ButtonStyle.primary, label="Submit")
-    async def submit(self, inter: discord.Interaction, button: Button) -> None:
+    async def submit(self, button: Button, inter: discord.Interaction) -> None:
         try:
-            config = {}
-            with open("config.json", mode="r", encoding="utf-8") as rb:
-                config = json.load(rb)
-            if self.channel:
-                config["channel"] = self.channel.id
-            with open("config.json", mode="w", encoding="utf-8") as wb:
-                json.dump(config, wb, separators=(',',':'))
+            logger.info("Initialize submit started user_id=%s", inter.user.id)
+            async with CONFIG_LOCK:
+                config = {}
+                with open("config.json", mode="r", encoding="utf-8") as rb:
+                    config = json.load(rb)
+                if self.channel:
+                    config["channel"] = self.channel.id
+                with open("config.json", mode="w", encoding="utf-8") as wb:
+                    json.dump(config, wb, separators=(',',':'))
+            logger.info(
+                "Initialize submit saved config user_id=%s configured_channel=%s",
+                inter.user.id,
+                config.get("channel"),
+            )
             await inter.response.send_message(f'Configured to send messages in {config["channel"]}', ephemeral=True)
             await inter.message.delete(delay=2)
         except AttributeError:  
+            logger.warning("Initialize submit missing required selections user_id=%s", inter.user.id)
             await inter.response.send_message(f'Error Submitting: Please ensure you selected all options.', ephemeral=True)
 
 
@@ -67,58 +84,97 @@ class AddCalendar(Modal):
         InputText(label="Calendar Name", style=InputTextStyle.short),
         InputText(label="Calendar acronym (EG: Staff Years -> sy)", style=InputTextStyle.short),
         InputText(label="Current Year", style=InputTextStyle.short),
-        InputText(label="Hours Per Year", style=InputTextStyle.short),
+        InputText(label="Staff Years Per Year", style=InputTextStyle.short),
         InputText(label="Is Staff Years (Y/N)", style=InputTextStyle.short)
     ]
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         try:
+            logger.info("Calendar submission started user_id=%s", interaction.user.id)
             # Validate input
             if not self.name.value.strip():
+                logger.warning("Calendar submission rejected empty name user_id=%s", interaction.user.id)
                 await interaction.response.send_message("Calendar name cannot be empty.", ephemeral=True)
                 return
             
             if not self.key.value.strip():
+                logger.warning("Calendar submission rejected empty key user_id=%s", interaction.user.id)
                 await interaction.response.send_message("Calendar key cannot be empty.", ephemeral=True)
                 return
             
-            # Check for duplicate calendar names in existing config
-            with open("config.json", mode="r", encoding="utf-8") as rb:
-                config = json.load(rb)
+            # Check for duplicate calendar names in existing config.
+            async with CONFIG_LOCK:
+                with open("config.json", mode="r", encoding="utf-8") as rb:
+                    config = json.load(rb)
             
             existing_names = [cal["name"] for cal in config["calendars"]]
             if self.name.value in existing_names:
+                logger.warning(
+                    "Calendar submission rejected duplicate name user_id=%s calendar_name=%s",
+                    interaction.user.id,
+                    self.name.value,
+                )
                 await interaction.response.send_message(f"A calendar with the name '{self.name.value}' already exists.", ephemeral=True)
                 return
             
             # Check for duplicate calendar keys
             existing_keys = [cal["key"] for cal in config["calendars"]]
             if self.key.value in existing_keys:
+                logger.warning(
+                    "Calendar submission rejected duplicate key user_id=%s calendar_key=%s",
+                    interaction.user.id,
+                    self.key.value,
+                )
                 await interaction.response.send_message(f"A calendar with the key '{self.key.value}' already exists.", ephemeral=True)
                 return
             
             # Validate numeric inputs
             try:
-                hours_per_year = float(self.hours_per_year.value)
-                if hours_per_year <= 0:
-                    await interaction.response.send_message("Hours per year must be a positive number.", ephemeral=True)
+                staff_years_per_year = float(self.staff_years_per_year.value)
+                if staff_years_per_year <= 0:
+                    logger.warning(
+                        "Calendar submission rejected non-positive staff years rate user_id=%s value=%s",
+                        interaction.user.id,
+                        self.staff_years_per_year.value,
+                    )
+                    await interaction.response.send_message("Staff years per year must be a positive number.", ephemeral=True)
                     return
             except ValueError:
-                await interaction.response.send_message("Hours per year must be a valid number.", ephemeral=True)
+                logger.warning(
+                    "Calendar submission rejected invalid staff years rate user_id=%s value=%s",
+                    interaction.user.id,
+                    self.staff_years_per_year.value,
+                )
+                await interaction.response.send_message("Staff years per year must be a valid number.", ephemeral=True)
                 return
             
             try:
                 current_year = int(self.current_year.value)
                 if current_year < 0:
+                    logger.warning(
+                        "Calendar submission rejected negative year user_id=%s value=%s",
+                        interaction.user.id,
+                        self.current_year.value,
+                    )
                     await interaction.response.send_message("Current year must be a non-negative number.", ephemeral=True)
                     return
             except ValueError:
+                logger.warning(
+                    "Calendar submission rejected invalid year user_id=%s value=%s",
+                    interaction.user.id,
+                    self.current_year.value,
+                )
                 await interaction.response.send_message("Current year must be a valid integer.", ephemeral=True)
                 return
             
             # Validate is_staff_years input
             is_staff_years_input = self.is_staff_years.value.lower().strip()
             if is_staff_years_input not in ['y', 'n', 'yes', 'no']:
+                logger.warning(
+                    "Calendar submission rejected invalid staff flag user_id=%s value=%s",
+                    interaction.user.id,
+                    self.is_staff_years.value,
+                )
                 await interaction.response.send_message("Is Staff Years must be Y/N, Yes/No.", ephemeral=True)
                 return
             
@@ -128,20 +184,13 @@ class AddCalendar(Modal):
             calendar_data = {
                 "name": self.name.value.strip(),
                 "key": self.key.value.strip(),
-                "hours_per_year": hours_per_year,
+                "staff_years_per_year": 1.0 if is_staff_years else staff_years_per_year,
                 "current_year": current_year,
                 "is_staff_years": is_staff_years
             }
             
             # Generate unique submission ID
             submission_id = str(uuid.uuid4())
-            
-            # Add to pending submissions
-            try:
-                with open("pending_calendars.json", mode="r", encoding="utf-8") as rb:
-                    pending_data = json.load(rb)
-            except FileNotFoundError:
-                pending_data = {"pending_submissions": []}
             
             submission = {
                 "submission_id": submission_id,
@@ -151,10 +200,25 @@ class AddCalendar(Modal):
                 "calendar_data": calendar_data
             }
             
-            pending_data["pending_submissions"].append(submission)
-            
-            with open("pending_calendars.json", mode="w", encoding="utf-8") as wb:
-                json.dump(pending_data, wb, indent=2)
+            # Lock pending read-modify-write to avoid dropped submissions under concurrency.
+            async with PENDING_LOCK:
+                try:
+                    with open("pending_calendars.json", mode="r", encoding="utf-8") as rb:
+                        pending_data = json.load(rb)
+                except FileNotFoundError:
+                    pending_data = {"pending_submissions": []}
+
+                pending_data["pending_submissions"].append(submission)
+                
+                with open("pending_calendars.json", mode="w", encoding="utf-8") as wb:
+                    json.dump(pending_data, wb, indent=2)
+            logger.info(
+                "Calendar submission saved pending user_id=%s submission_id=%s calendar_name=%s pending_count=%s",
+                interaction.user.id,
+                submission_id,
+                calendar_data["name"],
+                len(pending_data["pending_submissions"]),
+            )
             
             # Send approval request to the designated user (322487124102479873)
             try:
@@ -163,13 +227,29 @@ class AddCalendar(Modal):
                     embed = create_approval_embed(calendar_data, interaction.user.id, submission_id)
                     approval_view = ApprovalView(submission_id, calendar_data, interaction.user.id)
                     await approval_user.send(embed=embed, view=approval_view)
+                    logger.info(
+                        "Approval request sent via DM user_id=%s submission_id=%s approval_user_id=%s",
+                        interaction.user.id,
+                        submission_id,
+                        approval_user.id,
+                    )
                 else:
                     # Fallback: send to the channel where the command was used
                     embed = create_approval_embed(calendar_data, interaction.user.id, submission_id)
                     approval_view = ApprovalView(submission_id, calendar_data, interaction.user.id)
                     await interaction.channel.send(embed=embed, view=approval_view)
+                    logger.warning(
+                        "Approval user missing; request sent to channel user_id=%s submission_id=%s channel_id=%s",
+                        interaction.user.id,
+                        submission_id,
+                        interaction.channel.id if interaction.channel else None,
+                    )
             except Exception as e:
-                print(f"Error sending approval request: {e}")
+                logger.exception(
+                    "Approval DM failed; sending fallback channel message user_id=%s submission_id=%s",
+                    interaction.user.id,
+                    submission_id,
+                )
                 # Fallback: send to the channel where the command was used
                 embed = create_approval_embed(calendar_data, interaction.user.id, submission_id)
                 approval_view = ApprovalView(submission_id, calendar_data, interaction.user.id)
@@ -182,13 +262,19 @@ class AddCalendar(Modal):
                 f"• Name: {self.name.value}\n"
                 f"• Key: {self.key.value}\n"
                 f"• Current Year: {current_year}\n"
-                f"• Hours Per Year: {hours_per_year}\n"
+                f"• Staff Years Per Year: {1.0 if is_staff_years else staff_years_per_year}\n"
                 f"• Is Staff Years: {'Yes' if is_staff_years else 'No'}\n\n"
                 f"You will be notified when your submission is reviewed.",
                 ephemeral=True
             )
+            logger.info(
+                "Calendar submission success response sent user_id=%s submission_id=%s",
+                interaction.user.id,
+                submission_id,
+            )
             
         except Exception as e:
+            logger.exception("Calendar submission failed user_id=%s", interaction.user.id)
             await interaction.response.send_message(f"Error submitting calendar: {str(e)}", ephemeral=True)
         
         return await super().on_submit(interaction)

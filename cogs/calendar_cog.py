@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands, tasks
 from discord import ChannelType
-from views import AddCalendar, Initialize
+from views import Initialize
 from approval_views import ApprovalView, create_approval_embed
 import json
 import uuid
@@ -9,11 +9,27 @@ from datetime import datetime, timedelta
 import os
 import pandas as pd
 from time import time
-from tasks.new_year_task import compute_years, acronym
+from tasks.new_year_task import compute_years, acronym, ensure_staff_years_per_year
+import logging
+from file_locks import CONFIG_LOCK, PENDING_LOCK
+
+logger = logging.getLogger(__name__)
 
 class CalendarCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        """Start the new_year_loop when the bot is ready (Pycord: no cog_load, so we use on_ready)."""
+        if not self.new_year_loop.is_running():
+            self.new_year_loop.start()
+            logger.info("[CalendarCog] new_year_loop started")
+
+    def cog_unload(self):
+        """Stop the background loop when this cog is unloaded."""
+        if self.new_year_loop.is_running():
+            self.new_year_loop.cancel()
 
     @commands.slash_command(
         name="configure",
@@ -32,18 +48,105 @@ class CalendarCog(commands.Cog):
 
     @commands.slash_command(
         name="add_calendar",
-        description="Add a calendar"
+        description="Add a calendar submission for approval"
     )
-    @commands.has_permissions(moderate_members=True)
-    async def add_calendar(self, ctx):
+    async def add_calendar(
+        self,
+        ctx,
+        name: discord.Option(str, "Calendar display name (must be unique)", required=True),
+        key: discord.Option(str, "Short key/acronym, e.g. sy (must be unique)", required=True),
+        current_year: discord.Option(int, "Current year for this calendar", required=True),
+        staff_years_per_year: discord.Option(float, "How many staff years per in-game year", required=True),
+        is_staff_years: discord.Option(bool, "Whether this is the staff years calendar", required=False, default=False),
+    ):
         """Add a new calendar to the system"""
-        # For bridge commands, we need to send the modal differently
-        if hasattr(ctx, 'interaction'):
-            # This is a slash command, we can send the modal
-            await ctx.interaction.response.send_modal(AddCalendar())
-        else:
-            # This is a prefix command, we can't send modals
-            await ctx.respond("Please use the slash command version to add a calendar with a modal.", ephemeral=True)
+        try:
+            logger.info("add_calendar invoked user_id=%s name=%s key=%s", ctx.author.id, name, key)
+            cleaned_name = name.strip()
+            cleaned_key = key.strip()
+
+            if not cleaned_name:
+                await ctx.respond("Calendar name cannot be empty.", ephemeral=True)
+                return
+            if not cleaned_key:
+                await ctx.respond("Calendar key cannot be empty.", ephemeral=True)
+                return
+            if staff_years_per_year <= 0:
+                await ctx.respond("Staff years per year must be a positive number.", ephemeral=True)
+                return
+            if current_year < 0:
+                await ctx.respond("Current year must be a non-negative number.", ephemeral=True)
+                return
+
+            async with CONFIG_LOCK:
+                with open("config.json", mode="r", encoding="utf-8") as rb:
+                    config = json.load(rb)
+
+            existing_names = [cal["name"] for cal in config["calendars"]]
+            if cleaned_name in existing_names:
+                await ctx.respond(f"A calendar with the name '{cleaned_name}' already exists.", ephemeral=True)
+                return
+
+            existing_keys = [cal["key"] for cal in config["calendars"]]
+            if cleaned_key in existing_keys:
+                await ctx.respond(f"A calendar with the key '{cleaned_key}' already exists.", ephemeral=True)
+                return
+
+            calendar_data = {
+                "name": cleaned_name,
+                "key": cleaned_key,
+                "staff_years_per_year": 1.0 if is_staff_years else float(staff_years_per_year),
+                "current_year": int(current_year),
+                "is_staff_years": bool(is_staff_years),
+            }
+
+            submission_id = str(uuid.uuid4())
+            submission = {
+                "submission_id": submission_id,
+                "submitter_id": ctx.author.id,
+                "submitter_name": ctx.author.display_name,
+                "submission_timestamp": datetime.now().isoformat(),
+                "calendar_data": calendar_data,
+            }
+
+            async with PENDING_LOCK:
+                try:
+                    with open("pending_calendars.json", mode="r", encoding="utf-8") as rb:
+                        pending_data = json.load(rb)
+                except FileNotFoundError:
+                    pending_data = {"pending_submissions": []}
+                pending_data["pending_submissions"].append(submission)
+                with open("pending_calendars.json", mode="w", encoding="utf-8") as wb:
+                    json.dump(pending_data, wb, indent=2)
+
+            try:
+                approval_user = await ctx.bot.fetch_user(322487124102479873)
+                embed = create_approval_embed(calendar_data, ctx.author.id, submission_id)
+                approval_view = ApprovalView(submission_id, calendar_data, ctx.author.id)
+                if approval_user:
+                    await approval_user.send(embed=embed, view=approval_view)
+                else:
+                    await ctx.channel.send(embed=embed, view=approval_view)
+            except Exception:
+                logger.exception("Failed to DM approval user, falling back to channel submission_id=%s", submission_id)
+                embed = create_approval_embed(calendar_data, ctx.author.id, submission_id)
+                approval_view = ApprovalView(submission_id, calendar_data, ctx.author.id)
+                await ctx.channel.send(embed=embed, view=approval_view)
+
+            await ctx.respond(
+                f"✅ Calendar submission **{cleaned_name}** has been submitted for approval!\n\n"
+                f"**Details:**\n"
+                f"• Name: {cleaned_name}\n"
+                f"• Key: {cleaned_key}\n"
+                f"• Current Year: {int(current_year)}\n"
+                f"• Staff Years Per Year: {1.0 if is_staff_years else float(staff_years_per_year)}\n"
+                f"• Is Staff Years: {'Yes' if is_staff_years else 'No'}\n\n"
+                f"You will be notified when your submission is reviewed.",
+                ephemeral=True,
+            )
+        except Exception as e:
+            logger.exception("add_calendar failed user_id=%s", ctx.author.id)
+            await ctx.respond(f"Error submitting calendar: {str(e)}", ephemeral=True)
 
     @commands.slash_command(
         name="list_calendars",
@@ -84,7 +187,7 @@ class CalendarCog(commands.Cog):
                     value=(
                         f"**Key:** {calendar['key']}\n"
                         f"**Current Year:** {calendar['current_year']}\n"
-                        f"**Hours Per Year:** {calendar['hours_per_year']}\n"
+                        f"**Staff Years Per Year:** {calendar.get('staff_years_per_year', 'legacy')}\n"
                         f"**Is Staff Years:** {'Yes' if calendar['is_staff_years'] else 'No'}"
                     ),
                     inline=False
@@ -109,26 +212,32 @@ class CalendarCog(commands.Cog):
     @tasks.loop(minutes=30)
     async def new_year_loop(self):
         """Task that runs every 30 minutes to check for new years"""
+        logger.info("new_year_loop started")
         try:
-            with open('config.json', mode='r') as rb:
-                config = json.load(rb)
+            async with CONFIG_LOCK:
+                with open('config.json', mode='r', encoding='utf-8') as rb:
+                    config = json.load(rb)
+                if ensure_staff_years_per_year(config):
+                    with open("config.json", mode="w", encoding="utf-8") as wb:
+                        json.dump(config, wb, separators=(",", ":"))
         except FileNotFoundError:
-            print("Warning: config.json not found. Skipping new year calculation.")
+            logger.warning("Warning: config.json not found. Skipping new year calculation.")
             return
         except json.JSONDecodeError as e:
-            print(f"Error reading config.json: {e}. Skipping new year calculation.")
+            logger.warning(f"Error reading config.json: {e}. Skipping new year calculation.")
             return
-
-        df = None
+        except Exception as e:
+            logger.warning(f"Unexpected error reading config.json: {e}. Skipping new year calculation.")
+            return
+        logger.info("new_year_loop config loaded")
         try:
             sy = [cal for cal in config['calendars'] if cal['is_staff_years'] == True][0]
         except IndexError:
-            print("Warning: No staff years calendar found in config. Skipping new year calculation.")
+            logger.warning("Warning: No staff years calendar found in config. Skipping new year calculation.")
             return
 
+        df = None
         entry = None
-
-        print([c['key'] for c in config['calendars']])
         
         if os.path.exists('history.jsonl'):
             df = pd.read_json('history.jsonl', lines=True)
@@ -141,15 +250,15 @@ class CalendarCog(commands.Cog):
             dropped_df = df.dropna(subset=["printed"])
             
             if len(dropped_df) > 1:
-                print('  '.join([f"{k}: {v}" for k,v in dropped_df.iloc[-1].items()]))
+                logger.info('  '.join([f"{k}: {v}" for k,v in dropped_df.iloc[-1].items()]))
                 sy_delta = dropped_df['timestamp'].iat[-1] - datetime.fromtimestamp(time())
                 
-            print(f"{df['timestamp'].iat[-1]}, time_since_last_save: {abs(delta.total_seconds() / 60):.2f}, time_since_last_print: {abs(sy_delta.total_seconds() / 60):.2f}, delta_threshold_sy: {timedelta(hours=sy['hours_per_year']).total_seconds() / 60:.2f}, delta_threshold_min: {timedelta(hours=6).total_seconds() / 60:.2f}")
+            logger.info(f"{df['timestamp'].iat[-1]}, time_since_last_save: {abs(delta.total_seconds() / 60):.2f}, time_since_last_print: {abs(sy_delta.total_seconds() / 60):.2f}, delta_threshold_sy: {timedelta(hours=sy['hours_per_year']).total_seconds() / 60:.2f}, delta_threshold_min: {timedelta(hours=6).total_seconds() / 60:.2f}")
             
             if abs(sy_delta) >= timedelta(hours=sy["hours_per_year"]):
                 entry = compute_years(df.to_dict("records")[-1], config['calendars'], True)
                 df = pd.concat([df, pd.DataFrame([entry])])
-                print(df.tail(2))
+                logger.info(df.tail(2))
             elif abs(delta) > timedelta(hours=6):
                 entry = compute_years(df.to_dict("records")[-1], config['calendars'], None)
                 df.loc[len(df.index)] = entry
