@@ -241,11 +241,19 @@ def _button(label: str, style: discord.ButtonStyle, callback: Callable, *, row: 
 # Registrant wizard ----------------------------------------------------------------
 
 class WizardView(discord.ui.View):
-    """The private, step-by-step registration form."""
+    """The step-by-step registration form.
+
+    Public forms live in the registrant's thread (only they can use the controls) and stay
+    open much longer than ephemeral ones, whose interaction token expires after 15 minutes.
+    """
+
+    PUBLIC_TIMEOUT = 12 * 3600
 
     def __init__(self, service: Any, app_id: str, user_id: int, *, mode: str = "edit",
-                 calendars: Iterable[dict] = (), pending: Iterable[dict] = (), flash: str | None = None):
-        super().__init__(timeout=840)
+                 calendars: Iterable[dict] = (), pending: Iterable[dict] = (), flash: str | None = None,
+                 public: bool = False):
+        super().__init__(timeout=self.PUBLIC_TIMEOUT if public else 840)
+        self.public = public
         self.service = service
         self.app_id = app_id
         self.user_id = user_id
@@ -315,6 +323,11 @@ class WizardView(discord.ui.View):
 
     async def on_error(self, error: Exception, item: discord.ui.Item, interaction: discord.Interaction) -> None:
         await send_error(interaction, error)
+
+    async def on_timeout(self) -> None:
+        if self.public and self.service.wizards.get(self.app_id) is self:
+            await self.service.retire_wizard(
+                self.app_id, note="This form timed out. Your progress is saved; run `/register` to reopen it.")
 
     # Layout -----------------------------------------------------------------
 
@@ -471,8 +484,9 @@ class WizardView(discord.ui.View):
                     shown = "*optional*"
                 lines.append(f"**{label}**: {shown}")
             lines.append("")
-            lines.append("Upload with `/registration_upload`, choosing the purpose and attaching the image. "
-                         "The claim map should circle your spot with borders. City dots can be added later.")
+            lines.append("Run `/registration_upload` in this thread: pick what the image shows, then attach "
+                         "the file. The claim map should circle your spot with borders. City dots can be "
+                         "added later.")
         elif step == "rules":
             claims = " and ".join(f"<#{c}>" for c in settings.claim_check_channel_ids)
             lines.append("**No AI.** Everything must be your own writing and art.")
@@ -520,8 +534,24 @@ class WizardView(discord.ui.View):
         else:
             await interaction.response.edit_message(embed=self.embed(), view=self)
 
+    async def redraw(self, flash: str | None = None, step: str | None = None) -> bool:
+        """Update a public form in place, e.g. after an upload made with a slash command."""
+        if self.message is None or self.is_finished():
+            return False
+        if step:
+            self.go(step)
+        self.flash = flash
+        self.build()
+        try:
+            await self.message.edit(embed=self.embed(), view=self)
+            return True
+        except discord.HTTPException:
+            return False
+
     async def _finish(self, interaction: discord.Interaction, note: str | None) -> None:
         self.stop()
+        if self.public:
+            self.service.forget_wizard(self.app_id, self)
         await interaction.edit_original_response(
             embed=status_embed(self.app, self.service.settings, note), view=None)
 

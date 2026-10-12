@@ -31,8 +31,10 @@ COLUMNS = (
     "population", "start_year", "population_by", "thread_id", "status_message_id",
     "dm_channel_id", "dm_message_id", "calendar_submission_id", "tracker_nation_id",
     "tracker_url", "temp_role_granted_at", "temp_role_expires_at", "temp_role_removed_at",
-    "created_at", "updated_at",
+    "created_at", "updated_at", "wizard_message_id",
 )
+# Columns added after the first release; created on startup when missing.
+ADDED_COLUMNS = {"wizard_message_id": "INTEGER"}
 
 _live = ", ".join(f"'{s}'" for s in LIVE_STATES)
 SCHEMA = f"""
@@ -65,7 +67,8 @@ CREATE TABLE IF NOT EXISTS applications (
     temp_role_expires_at TEXT,
     temp_role_removed_at TEXT,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    wizard_message_id INTEGER
 );
 CREATE UNIQUE INDEX IF NOT EXISTS applications_one_live
     ON applications (guild_id, member_id) WHERE state IN ({_live});
@@ -143,6 +146,7 @@ class Application:
     temp_role_removed_at: str | None = None
     created_at: str = ""
     updated_at: str = ""
+    wizard_message_id: int | None = None
 
     @property
     def nation_name(self) -> str:
@@ -162,6 +166,10 @@ class RegistrationStore:
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.execute("PRAGMA foreign_keys=ON")
         self._db.executescript(SCHEMA)
+        existing = {row[1] for row in self._db.execute("PRAGMA table_info(applications)")}
+        for column, kind in ADDED_COLUMNS.items():
+            if column not in existing:
+                self._db.execute(f"ALTER TABLE applications ADD COLUMN {column} {kind}")
 
     def close(self) -> None:
         with self._lock:

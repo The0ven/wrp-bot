@@ -57,6 +57,8 @@ class RegistrationService:
         self.tracker = tracker
         self._locks: dict[str, asyncio.Lock] = {}
         self._renames: dict[int, list[float]] = {}
+        # Live wizard views posted in registration threads, by application id.
+        self.wizards: dict[str, Any] = {}
 
     def lock(self, app_id: str) -> asyncio.Lock:
         lock = self._locks.get(app_id)
@@ -371,6 +373,64 @@ class RegistrationService:
                               step="identity")
         return "Your unsent changes were discarded."
 
+    # Wizard in the thread ------------------------------------------------------
+
+    async def wizard_thread(self, app_id: str) -> Any:
+        """The thread the registrant's form should live in, creating a draft thread if needed."""
+        app = self.require(app_id)
+        if app.state in rs.EDITABLE_STATES:
+            await self.sync_draft_thread(app_id)
+            app = self.require(app_id)
+        if not app.thread_id:
+            return None
+        thread = await self.thread(app)
+        if thread is not None:
+            await self._unarchive(thread)
+        return thread
+
+    async def post_wizard(self, app_id: str, view: Any) -> Any:
+        """Post the form in the thread, replacing any earlier copy. None when that is not possible."""
+        thread = await self.wizard_thread(app_id)
+        if thread is None:
+            return None
+        await self.retire_wizard(app_id, delete=True)
+        try:
+            message = await thread.send(embed=view.embed(), view=view, allowed_mentions=NO_MENTIONS)
+        except discord.HTTPException:
+            logger.warning("Could not post the registration form for %s", app_id, exc_info=True)
+            return None
+        view.message = message
+        self.wizards[app_id] = view
+        self.store.update(app_id, wizard_message_id=message.id)
+        return message
+
+    def forget_wizard(self, app_id: str, view: Any) -> None:
+        if self.wizards.get(app_id) is view:
+            self.wizards.pop(app_id, None)
+            self.store.update(app_id, wizard_message_id=None)
+
+    async def retire_wizard(self, app_id: str, *, delete: bool = False, note: str | None = None) -> None:
+        """Stop the live form for an application and remove or close its thread message."""
+        view = self.wizards.pop(app_id, None)
+        if view is not None:
+            view.stop()
+        app = self.require(app_id)
+        if not app.wizard_message_id:
+            return
+        message_id = app.wizard_message_id
+        self.store.update(app_id, wizard_message_id=None)
+        if not app.thread_id:
+            return
+        if delete:
+            try:
+                await self.bot.get_partial_messageable(app.thread_id).get_partial_message(message_id).delete()
+                return
+            except discord.HTTPException:
+                logger.info("Could not delete old registration form %s", message_id)
+        await self._edit_message(app.thread_id, message_id, view=None, embed=discord.Embed(
+            description=note or "This form was closed. Run `/register` to open it again.",
+            colour=discord.Colour.light_grey()))
+
     # Submit and publish ----------------------------------------------------------
 
     async def submit(self, app_id: str, actor_id: int) -> str:
@@ -580,6 +640,8 @@ class RegistrationService:
                 raise ActionError(STALE)
             self.store.log(app_id, "withdrawn", actor_id, "staff" if by_staff else "registrant")
             app = self.require(app_id)
+            if by_staff:
+                await self.retire_wizard(app_id, note="This registration was withdrawn.")
             await self._edit_status(app, view=None)
             if app.dm_message_id:
                 await self._edit_message(app.dm_channel_id, app.dm_message_id, view=None)
@@ -1131,6 +1193,13 @@ class RegistrationService:
 
     async def resume(self) -> None:
         """Continue interrupted work after a restart."""
+        for app in self.store.list_states(rs.LIVE_STATES):
+            if app.wizard_message_id and app.id not in self.wizards:
+                try:
+                    await self.retire_wizard(app.id, note="This form closed when the bot restarted. "
+                                                          "Run `/register` to open it again.")
+                except Exception:  # noqa: BLE001
+                    logger.exception("Closing stale form for %s failed", app.id)
         for app in self.store.list_states(rs.LIVE_STATES):
             try:
                 if app.state == rs.AWAITING_STAFF and step_status(app, "publish") in (None, "pending"):

@@ -288,9 +288,19 @@ def with_channels(env):
     parent.guild = SimpleNamespace(id=GUILD_ID)
     parent.create_thread = AsyncMock(return_value=thread)
     channels = {SETTINGS.channel_id: parent, THREAD_ID: thread}
+    thread.deleted = []
+
+    def partial(channel_id):
+        def message(message_id):
+            async def delete():
+                thread.deleted.append(message_id)
+            return SimpleNamespace(delete=delete)
+        return SimpleNamespace(get_partial_message=message)
+
     env.svc.bot = SimpleNamespace(get_guild=lambda gid: env.guild,
                                   get_channel=lambda cid: channels.get(int(cid)),
-                                  fetch_channel=AsyncMock())
+                                  fetch_channel=AsyncMock(),
+                                  get_partial_messageable=partial)
     return parent, thread
 
 
@@ -394,3 +404,44 @@ async def test_tracker_link_only_in_approver_dm(env):
     approver_edits = [c.kwargs["embed"] for c in env.svc._edit_message.await_args_list
                       if c.args[:2] == (11, 12) and "embed" in c.kwargs]
     assert approver_edits and link in embed_text(approver_edits[-1])
+
+
+def fake_view():
+    return SimpleNamespace(embed=lambda: discord.Embed(title="form"), stop=MagicMock(), message=None)
+
+
+@pytest.mark.asyncio
+async def test_register_posts_form_in_new_thread_without_ping(env):
+    parent, thread = with_channels(env)
+    app = env.svc.start(GUILD_ID, MEMBER_ID)
+    view = fake_view()
+    message = await env.svc.post_wizard(app.id, view)
+
+    assert message is not None and view.message is message
+    parent.create_thread.assert_awaited_once()
+    assert env.svc.wizards[app.id] is view
+    got = env.store.get(app.id)
+    assert got.thread_id == THREAD_ID and got.wizard_message_id == message.id
+    assert got.state == rs.DRAFT
+    assert not role_pings(thread)
+    assert any(c.kwargs.get("view") is view for c in thread.send.await_args_list)
+
+    # Opening the form again replaces the old copy instead of stacking forms.
+    second = fake_view()
+    await env.svc.post_wizard(app.id, second)
+    view.stop.assert_called_once()
+    assert thread.deleted == [message.id]
+    assert env.svc.wizards[app.id] is second
+    parent.create_thread.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_stale_form_is_closed_on_restart(env):
+    _, thread = with_channels(env)
+    app = env.svc.start(GUILD_ID, MEMBER_ID)
+    await env.svc.post_wizard(app.id, fake_view())
+    env.svc.wizards.clear()  # simulate a restart: the in-memory view is gone
+    await env.svc.resume()
+    assert env.store.get(app.id).wizard_message_id is None
+    closing = [c for c in env.svc._edit_message.await_args_list if c.kwargs.get("view", 1) is None]
+    assert closing and "restarted" in closing[-1].kwargs["embed"].description

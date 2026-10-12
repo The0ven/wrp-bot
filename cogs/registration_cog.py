@@ -1,5 +1,6 @@
 """Slash commands, component routing and background work for nation registration."""
-from __future__ import annotations
+# No `from __future__ import annotations` here: py-cord reads the discord.Option(...)
+# annotations at runtime, and postponed (string) annotations turn every option into plain text.
 
 import logging
 import re
@@ -137,6 +138,15 @@ class RegistrationCog(commands.Cog):
             return
         calendars, pending = await self._calendar_lists()
         view = ui.WizardView(self.service, app.id, user_id, mode=mode, calendars=calendars,
+                             pending=pending, flash=flash, public=True)
+        message = await self.service.post_wizard(app.id, view)
+        if message is not None:
+            url = self.service.thread_url(self.service.require(app.id))
+            await followup.send(f"{flash + ' ' if flash else ''}Your registration form is in your thread: {url}",
+                                ephemeral=True)
+            return
+        # No thread available (e.g. channel misconfigured): fall back to a private form here.
+        view = ui.WizardView(self.service, app.id, user_id, mode=mode, calendars=calendars,
                              pending=pending, flash=flash)
         await followup.send(embed=view.embed(), view=view, ephemeral=True)
 
@@ -177,19 +187,20 @@ class RegistrationCog(commands.Cog):
             label = logic.UPLOAD_PURPOSES[purpose]
             flash = f"{ui.DONE} {label} saved."
             if app.state in rs.EDITABLE_STATES:
-                had_thread = bool(app.thread_id)
                 await self.service.sync_draft_thread(app.id)
-                app = self.service.require(app.id)
-                url = self.service.thread_url(app)
-                if url and not had_thread:
-                    flash += f" Your draft thread is open: {url}"
-            await self.send_home(ctx.followup, app, ctx.author.id, flash=flash)
+            view = self.service.wizards.get(app.id)
+            if view is not None and await view.redraw(flash, step="images"):
+                url = self.service.thread_url(self.service.require(app.id))
+                await ctx.followup.send(f"{flash} Your form is updated: {url}", ephemeral=True)
+                return
+            await self.send_home(ctx.followup, self.service.require(app.id), ctx.author.id, flash=flash)
         except Exception as error:  # noqa: BLE001
             await ui.send_error(ctx.interaction, error)
 
     async def save_upload(self, guild_id: int, member_id: int, purpose: str, attachment: Any) -> rs.Application:
         if purpose not in logic.UPLOAD_PURPOSES:
-            raise ActionError("Choose what the image shows.")
+            options = ", ".join(logic.UPLOAD_PURPOSES.values())
+            raise ActionError(f"Pick what the image shows from the list: {options}.")
         app = self.store.live_for_member(guild_id, member_id)
         if app is None:
             raise ActionError("Start your registration with `/register` first.")
