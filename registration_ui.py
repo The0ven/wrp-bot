@@ -144,13 +144,15 @@ def status_embed(app: rs.Application, settings: Any, note: str | None = None) ->
     return embed
 
 
-def population_embed(app: rs.Application, settings: Any, applicant: Any, thread_url: str | None) -> discord.Embed:
+def population_embed(app: rs.Application, settings: Any, applicant: Any, thread_url: str | None, *,
+                     staff_year: int | None = None) -> discord.Embed:
     data = app_data(app)
     review = app.review or {}
     system = logic.SYSTEMS.get(data.get("system"), ("Not chosen", ""))[0]
     embed = discord.Embed(
         title=logic.truncate(f"Population needed: {app.nation_name}", 256),
-        description="Staff approved this registration. Assign a starting population and start year.",
+        description="Staff approved this registration. Assign a starting population; the start year is "
+                    "the staff year when you confirm.",
         colour=discord.Colour.gold(),
     )
     name = getattr(applicant, "name", None)
@@ -162,6 +164,8 @@ def population_embed(app: rs.Application, settings: Any, applicant: Any, thread_
                     value=f"<@{review['reviewer_id']}>" if review.get("reviewer_id") else "-")
     embed.add_field(name="Calendar", value=logic.truncate(logic.calendar_label(data.get("calendar")), 1024),
                     inline=False)
+    embed.add_field(name="Start year", value=f"{staff_year} (current staff year)" if staff_year is not None
+                    else f"{WARN} Staff year unavailable, you will be asked for it")
     embed.add_field(name="Thread", value=thread_url or "-", inline=False)
     embed.set_footer(text=f"Application {app.id[:8]}{DOT}Revision {app.revision}")
     return embed
@@ -959,13 +963,18 @@ class PopulationModal(discord.ui.Modal):
         self.rev = rev
         self.edit = edit
         prefill = prefill or {}
+        # The start year follows the staff calendar; ask for it only if that cannot be read.
+        self.manual_year = bool(prefill.get("manual_year")) or service.staff_year() is None
         self.add_item(discord.ui.InputText(custom_id="population", label="Starting population", max_length=20,
                                            placeholder="e.g. 1,250,000", value=prefill.get("population") or None))
-        self.add_item(discord.ui.InputText(custom_id="start_year", label="Start year (tracker years)",
-                                           max_length=10, value=prefill.get("start_year") or None))
+        if self.manual_year:
+            self.add_item(discord.ui.InputText(custom_id="start_year", label="Start year (staff years)",
+                                               max_length=10, value=prefill.get("start_year") or None))
 
     async def callback(self, interaction: discord.Interaction) -> None:
         raw = {child.custom_id: logic.clean(child.value) for child in self.children}
+        if self.manual_year:
+            raw["manual_year"] = "1"
         view = PopulationConfirmView(self.service, self.app_id, self.rev, raw)
         if self.edit:
             await interaction.response.edit_message(embed=view.embed(), view=view)
@@ -983,8 +992,12 @@ class PopulationConfirmView(discord.ui.View):
         self.app_id = app_id
         self.rev = rev
         self.raw = raw
+        self.manual_year = bool(raw.get("manual_year"))
         self.population = logic.parse_int(raw.get("population"), *logic.POPULATION_RANGE)
-        self.start_year = logic.parse_int(raw.get("start_year"), *logic.YEAR_RANGE)
+        if self.manual_year:
+            self.start_year = logic.parse_int(raw.get("start_year"), *logic.YEAR_RANGE)
+        else:
+            self.start_year = service.staff_year()
         valid = self.population is not None and self.start_year is not None
         self.add_item(_button("Confirm", discord.ButtonStyle.success, self._confirm, row=0, emoji=DONE,
                               disabled=not valid))
@@ -996,8 +1009,14 @@ class PopulationConfirmView(discord.ui.View):
         ylow, yhigh = logic.YEAR_RANGE
         pop = f"{self.population:,}" if self.population is not None else (
             f"{WARN} '{logic.truncate(self.raw.get('population'), 30)}' must be a whole number from {low:,} to {high:,}")
-        year = str(self.start_year) if self.start_year is not None else (
-            f"{WARN} '{logic.truncate(self.raw.get('start_year'), 30)}' must be a whole number from {ylow} to {yhigh}")
+        if not self.manual_year:
+            year = (f"{self.start_year} (current staff year)" if self.start_year is not None
+                    else f"{WARN} Staff year unavailable; press Edit to enter it")
+        elif self.start_year is not None:
+            year = str(self.start_year)
+        else:
+            year = (f"{WARN} '{logic.truncate(self.raw.get('start_year'), 30)}' must be a whole number "
+                    f"from {ylow} to {yhigh}")
         embed = discord.Embed(title=logic.truncate(f"Confirm population: {app.nation_name}", 256),
                               colour=discord.Colour.gold())
         embed.add_field(name="Starting population", value=pop, inline=False)
@@ -1015,8 +1034,10 @@ class PopulationConfirmView(discord.ui.View):
 
     async def _confirm(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer()
+        # Automatic years are read again at confirmation, so a year change in between is respected.
         app = await self.service.confirm_population(self.app_id, self.rev, interaction.user.id,
-                                                    self.population, self.start_year)
+                                                    self.population,
+                                                    self.start_year if self.manual_year else None)
         self.stop()
         if app.state == rs.ACTIVE:
             content = f"{DONE} {app.nation_name} is registered."

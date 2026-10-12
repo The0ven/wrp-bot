@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import uuid
 from datetime import datetime
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 CONFIG_PATH = "config.json"
 PENDING_PATH = "pending_calendars.json"
+HISTORY_PATH = "history.jsonl"
 
 
 class CalendarConflict(ValueError):
@@ -27,6 +29,37 @@ class CalendarConflict(ValueError):
 def approver_id() -> int:
     raw = os.getenv("CALENDAR_APPROVER_ID", "").strip()
     return int(raw) if raw else DEFAULT_APPROVAL_USER_ID
+
+
+def current_staff_year(config_path: str = CONFIG_PATH, history_path: str = HISTORY_PATH) -> int | None:
+    """The staff year as last announced by the new-year loop.
+
+    Uses the same rounding as the "A New Year Has Dawned" post. Falls back to the whole part of
+    the latest computed value when nothing has been announced yet; None when it cannot be read.
+    """
+    try:
+        with open(config_path, mode="r", encoding="utf-8") as fh:
+            calendars = json.load(fh).get("calendars") or []
+        key = next(c["key"] for c in calendars if c.get("is_staff_years") is True)
+        announced = latest = None
+        with open(history_path, mode="r", encoding="utf-8") as fh:
+            for line in fh:
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                value = row.get(key)
+                if not isinstance(value, (int, float)) or isinstance(value, bool) or math.isnan(value):
+                    continue
+                latest = value
+                if row.get("printed") not in (None, ""):
+                    announced = value
+    except (OSError, ValueError, KeyError, StopIteration, AttributeError):
+        logger.warning("Could not read the current staff year", exc_info=True)
+        return None
+    if announced is not None:
+        return int(f"{announced:.0f}")
+    return math.floor(latest) if latest is not None else None
 
 
 async def load_calendars() -> list[dict]:

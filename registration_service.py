@@ -578,7 +578,8 @@ class RegistrationService:
             approver = self.settings.population_approver_id
             guild = self.bot.get_guild(app.guild_id)
             applicant = await self.fetch_member(guild, app.member_id) if guild else None
-            embed = ui.population_embed(app, self.settings, applicant, self.thread_url(app))
+            embed = ui.population_embed(app, self.settings, applicant, self.thread_url(app),
+                                        staff_year=self.staff_year())
             status, message = await self.dm(approver, embed=embed, view=ui.population_controls(app))
             if message is None:
                 message = await self.send_thread(
@@ -652,7 +653,8 @@ class RegistrationService:
     # Population and provisioning ------------------------------------------------
 
     async def confirm_population(self, app_id: str, revision: int, actor_id: int,
-                                 population: int, start_year: int) -> rs.Application:
+                                 population: int, start_year: int | None = None) -> rs.Application:
+        """Assign population. Without an explicit start year, the current staff year is used."""
         if int(actor_id) != int(self.settings.population_approver_id):
             raise ActionError("Only the population approver can assign population.")
         async with self.lock(app_id):
@@ -660,6 +662,11 @@ class RegistrationService:
             low, high = logic.POPULATION_RANGE
             if not isinstance(population, int) or not low <= population <= high:
                 raise ActionError(f"Population must be a whole number from {low:,} to {high:,}.")
+            if start_year is None:
+                start_year = self.staff_year()
+                if start_year is None:
+                    raise ActionError("The current staff year could not be read from the calendar. "
+                                      "Press Edit and enter the start year manually.")
             low, high = logic.YEAR_RANGE
             if not isinstance(start_year, int) or not low <= start_year <= high:
                 raise ActionError(f"Start year must be a whole number from {low} to {high}.")
@@ -675,6 +682,10 @@ class RegistrationService:
             await self._edit_status(app)
         await self.provision(app_id)
         return self.require(app_id)
+
+    @staticmethod
+    def staff_year() -> int | None:
+        return cs.current_staff_year()
 
     async def provision(self, app_id: str) -> None:
         activated = False

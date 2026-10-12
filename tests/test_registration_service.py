@@ -406,6 +406,28 @@ async def test_tracker_link_only_in_approver_dm(env):
     assert approver_edits and link in embed_text(approver_edits[-1])
 
 
+@pytest.mark.asyncio
+async def test_start_year_defaults_to_current_staff_year(env, monkeypatch):
+    import calendar_submissions as cs
+
+    monkeypatch.setattr(cs, "current_staff_year", lambda *a, **k: 725)
+    app = awaiting_population(env)
+    result = await env.svc.confirm_population(app.id, 2, SETTINGS.population_approver_id, 5000)
+    assert result.start_year == 725
+    assert env.tracker.create_registration.await_args.kwargs["start_year"] == 725
+
+
+@pytest.mark.asyncio
+async def test_unreadable_staff_year_blocks_automatic_confirm(env, monkeypatch):
+    import calendar_submissions as cs
+
+    monkeypatch.setattr(cs, "current_staff_year", lambda *a, **k: None)
+    app = awaiting_population(env)
+    with pytest.raises(ActionError, match="staff year"):
+        await env.svc.confirm_population(app.id, 2, SETTINGS.population_approver_id, 5000)
+    assert env.store.get(app.id).state == rs.AWAITING_POPULATION
+
+
 def fake_view():
     return SimpleNamespace(embed=lambda: discord.Embed(title="form"), stop=MagicMock(), message=None)
 
