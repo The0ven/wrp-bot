@@ -366,3 +366,31 @@ async def test_draft_thread_failure_does_not_block_saving(env):
     assert got.thread_id is None
     assert got.draft["short_name"] == "Avalon"
     assert got.state == rs.DRAFT
+
+
+def embed_text(embed):
+    parts = [embed.title or "", embed.description or ""]
+    parts += [f"{f.name} {f.value}" for f in embed.fields]
+    return "\n".join(parts)
+
+
+@pytest.mark.asyncio
+async def test_tracker_link_only_in_approver_dm(env):
+    import registration_ui as ui
+
+    app = awaiting_population(env)
+    env.store.update(app.id, dm_channel_id=11, dm_message_id=12)
+    result = await env.svc.confirm_population(app.id, 2, SETTINGS.population_approver_id, 5000, 1200)
+    link = "http://t/nations/n1"
+    assert result.tracker_url == link
+
+    thread_posts = [c.kwargs["embed"] for c in env.svc.send_thread.await_args_list if "embed" in c.kwargs]
+    registrant_dms = [c.kwargs["embed"] for c in env.svc.dm.await_args_list
+                      if c.args and c.args[0] == MEMBER_ID and "embed" in c.kwargs]
+    assert thread_posts and registrant_dms
+    for embed in thread_posts + registrant_dms + [ui.status_embed(result, SETTINGS)]:
+        assert link not in embed_text(embed)
+
+    approver_edits = [c.kwargs["embed"] for c in env.svc._edit_message.await_args_list
+                      if c.args[:2] == (11, 12) and "embed" in c.kwargs]
+    assert approver_edits and link in embed_text(approver_edits[-1])

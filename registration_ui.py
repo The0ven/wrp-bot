@@ -88,6 +88,7 @@ async def send_error(interaction: discord.Interaction, error: BaseException) -> 
 
 
 def status_embed(app: rs.Application, settings: Any, note: str | None = None) -> discord.Embed:
+    """Status card shown in threads and ephemeral replies. Never includes tracker links."""
     data = app_data(app)
     if note is None and app.state == rs.DRAFT:
         note = ("Draft in progress. The registrant can keep editing with `/register`; staff are "
@@ -111,8 +112,6 @@ def status_embed(app: rs.Application, settings: Any, note: str | None = None) ->
     if app.population is not None:
         embed.add_field(name="Population", value=f"{app.population:,}")
         embed.add_field(name="Start year", value=str(app.start_year))
-    if app.tracker_url:
-        embed.add_field(name="Tracker", value=app.tracker_url, inline=False)
     if app.temp_role_expires_at and not app.temp_role_removed_at:
         embed.add_field(name="Temporary role expires", value=ts(app.temp_role_expires_at, "F"))
     if app.notes:
@@ -168,7 +167,9 @@ def population_embed(app: rs.Application, settings: Any, applicant: Any, thread_
     return embed
 
 
-def active_embed(app: rs.Application, expiry: Any, thread_url: str | None = None) -> discord.Embed:
+def active_embed(app: rs.Application, expiry: Any, thread_url: str | None = None, *,
+                 show_tracker: bool = False) -> discord.Embed:
+    """Completion card. Tracker links are only for the population approver's DM."""
     data = app_data(app)
     system = logic.SYSTEMS.get(data.get("system"), ("Not chosen", ""))[0]
     embed = discord.Embed(
@@ -180,7 +181,7 @@ def active_embed(app: rs.Application, expiry: Any, thread_url: str | None = None
     if app.start_year is not None:
         embed.add_field(name="Start year", value=str(app.start_year))
     embed.add_field(name="System", value=system)
-    if app.tracker_url:
+    if show_tracker and app.tracker_url:
         embed.add_field(name="Tracker", value=app.tracker_url, inline=False)
     if expiry:
         embed.add_field(name="Temporary role expires", value=f"{ts(expiry, 'F')} ({ts(expiry, 'R')})", inline=False)

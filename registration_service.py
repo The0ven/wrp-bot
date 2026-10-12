@@ -744,7 +744,9 @@ class RegistrationService:
                                     "DMs are closed." if status == "forbidden" else None)
             if due("approver_dm"):
                 if app.dm_message_id:
-                    ok = await self._edit_message(app.dm_channel_id, app.dm_message_id, embed=embed, view=None)
+                    approver_embed = ui.active_embed(app, expiry, self.thread_url(app), show_tracker=True)
+                    ok = await self._edit_message(app.dm_channel_id, app.dm_message_id,
+                                                  embed=approver_embed, view=None)
                     self.store.set_step(app_id, "approver_dm", "done" if ok else "failed")
                 else:
                     self.store.set_step(app_id, "approver_dm", "skipped")
