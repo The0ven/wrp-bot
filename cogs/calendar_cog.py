@@ -3,6 +3,7 @@ from discord.ext import commands, tasks
 from discord import ChannelType
 from views import Initialize
 from approval_views import ApprovalView, create_approval_embed
+from calendar_submissions import CalendarConflict, queue_calendar_submission
 import json
 import uuid
 from datetime import datetime, timedelta
@@ -78,20 +79,6 @@ class CalendarCog(commands.Cog):
                 await ctx.respond("Current year must be a non-negative number.", ephemeral=True)
                 return
 
-            async with CONFIG_LOCK:
-                with open("config.json", mode="r", encoding="utf-8") as rb:
-                    config = json.load(rb)
-
-            existing_names = [cal["name"] for cal in config["calendars"]]
-            if cleaned_name in existing_names:
-                await ctx.respond(f"A calendar with the name '{cleaned_name}' already exists.", ephemeral=True)
-                return
-
-            existing_keys = [cal["key"] for cal in config["calendars"]]
-            if cleaned_key in existing_keys:
-                await ctx.respond(f"A calendar with the key '{cleaned_key}' already exists.", ephemeral=True)
-                return
-
             calendar_data = {
                 "name": cleaned_name,
                 "key": cleaned_key,
@@ -100,38 +87,17 @@ class CalendarCog(commands.Cog):
                 "is_staff_years": bool(is_staff_years),
             }
 
-            submission_id = str(uuid.uuid4())
-            submission = {
-                "submission_id": submission_id,
-                "submitter_id": ctx.author.id,
-                "submitter_name": ctx.author.display_name,
-                "submission_timestamp": datetime.now().isoformat(),
-                "calendar_data": calendar_data,
-            }
-
-            async with PENDING_LOCK:
-                try:
-                    with open("pending_calendars.json", mode="r", encoding="utf-8") as rb:
-                        pending_data = json.load(rb)
-                except FileNotFoundError:
-                    pending_data = {"pending_submissions": []}
-                pending_data["pending_submissions"].append(submission)
-                with open("pending_calendars.json", mode="w", encoding="utf-8") as wb:
-                    json.dump(pending_data, wb, indent=2)
-
             try:
-                approval_user = await ctx.bot.fetch_user(322487124102479873)
-                embed = create_approval_embed(calendar_data, ctx.author.id, submission_id)
-                approval_view = ApprovalView(submission_id, calendar_data, ctx.author.id)
-                if approval_user:
-                    await approval_user.send(embed=embed, view=approval_view)
-                else:
-                    await ctx.channel.send(embed=embed, view=approval_view)
-            except Exception:
-                logger.exception("Failed to DM approval user, falling back to channel submission_id=%s", submission_id)
-                embed = create_approval_embed(calendar_data, ctx.author.id, submission_id)
-                approval_view = ApprovalView(submission_id, calendar_data, ctx.author.id)
-                await ctx.channel.send(embed=embed, view=approval_view)
+                await queue_calendar_submission(
+                    ctx.bot,
+                    calendar_data,
+                    ctx.author.id,
+                    ctx.author.display_name,
+                    fallback_channel=ctx.channel,
+                )
+            except CalendarConflict as conflict:
+                await ctx.respond(str(conflict), ephemeral=True)
+                return
 
             await ctx.respond(
                 f"✅ Calendar submission **{cleaned_name}** has been submitted for approval!\n\n"

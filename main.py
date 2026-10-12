@@ -47,7 +47,7 @@ def main():
     bot = WRPBot()
     logger.info("Setting up bot")
     # Pycord: load_extension is sync; load before run() so cogs are ready for on_ready
-    for ext in ("cogs.calendar_cog", "cogs.admin_cog", "cogs.query_cog"):
+    for ext in ("cogs.calendar_cog", "cogs.admin_cog", "cogs.query_cog", "cogs.registration_cog"):
         bot.load_extension(ext)
         logger.info("Loaded extension: %s", ext)
     bot.run(os.getenv('TOKEN'))

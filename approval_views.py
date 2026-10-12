@@ -1,3 +1,4 @@
+import asyncio
 import discord
 from discord import Button, ButtonStyle
 from discord.ui import View, button
@@ -25,6 +26,10 @@ class ApprovalView(View):
         self.submission_id = submission_id
         self.calendar_data = calendar_data
         self.submitter_id = submitter_id
+        # Stable custom IDs let the bot re-register these buttons after a restart.
+        for item, action in ((self.approve_calendar, "approve"), (self.deny_calendar, "deny")):
+            item.custom_id = f"wrpcal:{action}:{submission_id}"
+            item._provided_custom_id = True
         logger.info(
             "Initialized ApprovalView submission_id=%s submitter_id=%s calendar_name=%s",
             submission_id,
@@ -91,6 +96,7 @@ class ApprovalView(View):
             
             # Notify the submitter
             await self._notify_submitter(interaction.client, "approved")
+            self._dispatch_decision(interaction.client, "approved")
             logger.info("Approve flow complete submission_id=%s", self.submission_id)
             
         except Exception as e:
@@ -134,11 +140,23 @@ class ApprovalView(View):
             
             # Notify the submitter
             await self._notify_submitter(interaction.client, "denied")
+            self._dispatch_decision(interaction.client, "denied")
             logger.info("Deny flow complete submission_id=%s", self.submission_id)
             
         except Exception as e:
             logger.exception("Deny failed submission_id=%s", self.submission_id)
             await interaction.response.send_message(f"Error denying calendar: {str(e)}", ephemeral=True)
+
+    def _dispatch_decision(self, client: discord.Client, status: str) -> None:
+        """Let other cogs (nation registration) react to calendar decisions."""
+        dispatch = getattr(client, "dispatch", None)
+        # Client.dispatch is synchronous; skip async test doubles.
+        if dispatch is None or asyncio.iscoroutinefunction(dispatch):
+            return
+        try:
+            dispatch("calendar_decision", self.submission_id, status, self.calendar_data)
+        except Exception:
+            logger.exception("Dispatching calendar_decision failed submission_id=%s", self.submission_id)
 
     async def _remove_from_pending(self):
         """Remove the submission from pending_calendars.json"""
