@@ -105,9 +105,22 @@ class RegistrationService:
 
     # Group role allowlists ---------------------------------------------------
 
-    def group_roles(self) -> dict[str, list[int]]:
+    def group_roles(self, guild: Any = None) -> dict[str, list[int]]:
+        """Allowed faith/region roles: the manual allowlist plus, given a guild, prefix-named roles."""
         stored = self.store.get_setting("group_roles", {}) or {}
-        return {g: [int(i) for i in stored.get(g, [])] for g in ui.GROUPS}
+        roles = {g: [int(i) for i in stored.get(g, [])] for g in ui.GROUPS}
+        if guild is None:
+            return roles
+        core = self._core_role_ids()
+        prefixes = self.settings.group_role_prefixes
+        for role in sorted(getattr(guild, "roles", None) or [], key=lambda r: -getattr(r, "position", 0)):
+            if role.id in core or getattr(role, "managed", False):
+                continue
+            for group, prefix in prefixes.items():
+                if prefix and logic.clean(role.name).casefold().startswith(prefix.casefold()) \
+                        and role.id not in roles[group]:
+                    roles[group].append(role.id)
+        return roles
 
     def _core_role_ids(self) -> set[int]:
         s = self.settings
@@ -542,7 +555,7 @@ class RegistrationService:
             region = logic.clean(region)
             if not 1 <= len(region) <= 100:
                 raise ActionError("Region must be 1-100 characters.")
-            allowed = self.group_roles()
+            allowed = self.group_roles(getattr(reviewer, "guild", None))
             faith = [int(i) for i in faith_ids]
             continent = [int(i) for i in continent_ids]
             if any(i not in allowed["faith"] for i in faith) or any(i not in allowed["continent"] for i in continent):

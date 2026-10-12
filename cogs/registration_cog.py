@@ -27,7 +27,7 @@ SETTINGS = load_settings()
 GUILD_IDS = list(SETTINGS.guild_ids) or None
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 PURPOSE_CHOICES = [discord.OptionChoice(label, key) for key, label in logic.UPLOAD_PURPOSES.items()]
-GROUP_CHOICES = [discord.OptionChoice(group.title(), group) for group in ui.GROUPS]
+GROUP_CHOICES = [discord.OptionChoice(ui.GROUP_LABELS[group], group) for group in ui.GROUPS]
 QUEUE_TITLES = {
     "review": "Awaiting staff review",
     "population": "Awaiting population",
@@ -256,7 +256,7 @@ class RegistrationCog(commands.Cog):
             if action == "review":
                 await interaction.response.defer(ephemeral=True, invisible=False)
                 view = ui.ReviewView(service, app_id, revision, user, await self._regions(),
-                                     service.group_roles(), interaction.guild)
+                                     service.group_roles(interaction.guild), interaction.guild)
                 await interaction.followup.send(embed=view.embed(), view=view, ephemeral=True)
                 return
             if action in ("changes", "reject"):
@@ -338,11 +338,14 @@ class RegistrationCog(commands.Cog):
                             value=logic.truncate("\n".join(lines) or "None", 1024), inline=False)
         return embed
 
-    def roles_embed(self) -> discord.Embed:
+    def roles_embed(self, guild: Any = None) -> discord.Embed:
         embed = discord.Embed(title="Registration group roles", colour=discord.Colour.blurple())
-        for group, role_ids in self.service.group_roles().items():
+        prefixes = self.settings.group_role_prefixes
+        embed.description = (f"Roles named `{prefixes['continent']} ...` or `{prefixes['faith']} ...` are "
+                             "included automatically; `/registrations roles_add` covers any others.")
+        for group, role_ids in self.service.group_roles(guild).items():
             value = ", ".join(f"<@&{rid}>" for rid in role_ids) or "None configured"
-            embed.add_field(name=group.title(), value=logic.truncate(value, 1024), inline=False)
+            embed.add_field(name=ui.GROUP_LABELS[group], value=logic.truncate(value, 1024), inline=False)
         return embed
 
     @registrations.command(name="queue", description="Show registrations waiting on staff or population")
@@ -411,29 +414,34 @@ class RegistrationCog(commands.Cog):
             return await self.service.release(ctx.guild.id, member.id, ctx.author)
         await self._staff_action(ctx, work)
 
-    @registrations.command(name="roles_add", description="Allow a faith or continent role in staff review")
+    @registrations.command(name="roles_add", description="Allow an extra faith or region role in staff review")
     async def reg_roles_add(self, ctx: discord.ApplicationContext,
                             group: discord.Option(str, "Role group", choices=GROUP_CHOICES),
                             role: discord.Option(discord.Role, "Role to allow")) -> None:
         async def work() -> Any:
             self.service.add_group_role(group, role.id)
-            return f"Added {role.mention} to the {group} roles."
+            return f"Added {role.mention} to the {ui.GROUP_LABELS[group].lower()} roles."
         await self._staff_action(ctx, work, admin=True)
 
-    @registrations.command(name="roles_remove", description="Remove a faith or continent role from staff review")
+    @registrations.command(name="roles_remove", description="Remove an extra faith or region role from staff review")
     async def reg_roles_remove(self, ctx: discord.ApplicationContext,
                                group: discord.Option(str, "Role group", choices=GROUP_CHOICES),
                                role: discord.Option(discord.Role, "Role to remove")) -> None:
         async def work() -> Any:
+            label = ui.GROUP_LABELS[group].lower()
             if self.service.remove_group_role(group, role.id):
-                return f"Removed {role.mention} from the {group} roles."
-            return f"{role.mention} was not one of the {group} roles."
+                return f"Removed {role.mention} from the {label} roles."
+            prefix = self.settings.group_role_prefixes.get(group, "")
+            if prefix and role.name.casefold().startswith(prefix.casefold()):
+                return (f"{role.mention} is included because its name starts with `{prefix}`. "
+                        "Rename the role to stop offering it.")
+            return f"{role.mention} was not one of the {label} roles."
         await self._staff_action(ctx, work, admin=True)
 
-    @registrations.command(name="roles_list", description="List the faith and continent roles staff can grant")
+    @registrations.command(name="roles_list", description="List the faith and region roles staff can grant")
     async def reg_roles_list(self, ctx: discord.ApplicationContext) -> None:
         async def work() -> Any:
-            return self.roles_embed()
+            return self.roles_embed(ctx.guild)
         await self._staff_action(ctx, work, admin=True)
 
     # Background work -------------------------------------------------------------------

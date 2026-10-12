@@ -428,6 +428,60 @@ async def test_unreadable_staff_year_blocks_automatic_confirm(env, monkeypatch):
     assert env.store.get(app.id).state == rs.AWAITING_POPULATION
 
 
+def prefixed_guild():
+    roles = [FakeRole(901, "Region: Anzova", 111), FakeRole(902, "Region: Outer Csaria", 110),
+             FakeRole(903, "Faith: Yucka", 103), FakeRole(904, "Faith: Taqwah", 102),
+             FakeRole(905, "Regional Mod", 120), FakeRole(SETTINGS.player_role_id, "Region: Player", 50)]
+    by_id = {r.id: r for r in roles}
+    return SimpleNamespace(id=GUILD_ID, roles=roles, get_role=lambda rid: by_id.get(int(rid)))
+
+
+def test_prefixed_roles_are_discovered(env):
+    env.svc.add_group_role("faith", FAITH_ROLE)
+    roles = env.svc.group_roles(prefixed_guild())
+    assert roles["continent"] == [901, 902]
+    assert roles["faith"] == [FAITH_ROLE, 903, 904]
+    # Without a guild only the manual allowlist is known.
+    assert env.svc.group_roles()["continent"] == []
+
+
+@pytest.mark.asyncio
+async def test_staff_approve_accepts_prefixed_roles(env):
+    guild = prefixed_guild()
+    data = {**approved_data(), "religions": "Yucka"}
+    app = env.store.create(GUILD_ID, MEMBER_ID, state=rs.AWAITING_STAFF, revision=1, submitted=data)
+    env.svc.send_population_request = AsyncMock()
+    reviewer = SimpleNamespace(id=77, guild=guild, guild_permissions=SimpleNamespace(administrator=True),
+                               roles=[])
+    await env.svc.staff_approve(app.id, 1, reviewer, "ANZOVA", [903], [901])
+    review = env.store.get(app.id).review
+    assert review["faith_role_ids"] == [903] and review["continent_role_ids"] == [901]
+
+
+@pytest.mark.asyncio
+async def test_review_form_preselects_matching_roles(env):
+    import registration_ui as ui
+
+    guild = prefixed_guild()
+    data = {**approved_data(), "religions": "Mostly Taqwah, some Yucka folk beliefs"}
+    app = env.store.create(GUILD_ID, MEMBER_ID, state=rs.AWAITING_STAFF, revision=1, submitted=data)
+    view = ui.ReviewView(env.svc, app.id, 1, SimpleNamespace(id=77), ["ANZOVA", "OUTER CSARIA"],
+                         env.svc.group_roles(guild), guild)
+    assert sorted(view.choices["faith"]) == [903, 904]
+    assert view.choices["continent"] is None and not view.ready
+
+    view.region = "OUTER CSARIA"
+    view._match_region_role()
+    assert view.choices["continent"] == [902] and view.ready
+
+    # A manual region-role choice is not overwritten by later region changes.
+    view.choices["continent"] = []
+    view.region_auto = False
+    view.region = "ANZOVA"
+    view._match_region_role()
+    assert view.choices["continent"] == []
+
+
 def fake_view():
     return SimpleNamespace(embed=lambda: discord.Embed(title="form"), stop=MagicMock(), message=None)
 

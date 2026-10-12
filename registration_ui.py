@@ -21,6 +21,8 @@ NONE_VALUE = "__none__"
 NEW_REGION = "__new__"
 CUSTOM_REGION = "__custom__"
 GROUPS = ("faith", "continent")
+# "continent" is the stored key; staff and members know these as Region roles.
+GROUP_LABELS = {"faith": "Faith", "continent": "Region"}
 
 STATE_LABELS = {
     rs.DRAFT: "Draft",
@@ -826,14 +828,27 @@ class NewRegionModal(discord.ui.Modal):
         match = next((r for r in self.review.regions if r.casefold() == name.casefold()), None)
         self.review.custom_region = match or name
         self.review.region = self.review.custom_region
+        self.review._match_region_role()
         await self.review.refresh(interaction)
 
     async def on_error(self, error: Exception, interaction: discord.Interaction) -> None:
         await send_error(interaction, error)
 
 
+def role_suffix(name: str, prefix: str) -> str:
+    """'Region: Outer Csaria' -> 'outer csaria' for matching against tracker regions and religions."""
+    name = logic.clean(name)
+    if prefix and name.casefold().startswith(prefix.casefold()):
+        name = name[len(prefix):]
+    return name.strip().casefold()
+
+
 class ReviewView(discord.ui.View):
-    """Ephemeral staff form: tracker region plus faith and continent roles."""
+    """Ephemeral staff form: tracker region plus faith and region roles.
+
+    The region role matching the chosen tracker region, and faith roles named in the
+    registrant's religions, are pre-selected; staff can change either before approving.
+    """
 
     def __init__(self, service: Any, app_id: str, rev: int, reviewer: Any, regions: Iterable[str],
                  group_roles: dict, guild: Any):
@@ -850,6 +865,14 @@ class ReviewView(discord.ui.View):
             roles = [guild.get_role(int(r)) for r in (group_roles.get(group) or [])]
             self.roles[group] = [r for r in roles if r is not None][:24]
         self.choices: dict[str, list[int] | None] = {g: ([] if not self.roles[g] else None) for g in GROUPS}
+        prefixes = service.settings.group_role_prefixes
+        self.prefixes = prefixes
+        religions = logic.clean((service.require(app_id).submitted or {}).get("religions")).casefold()
+        faith = [r.id for r in self.roles["faith"]
+                 if (name := role_suffix(r.name, prefixes["faith"])) and name in religions]
+        if faith:
+            self.choices["faith"] = faith
+        self.region_auto = True
         self.build()
 
     @property
@@ -881,7 +904,7 @@ class ReviewView(discord.ui.View):
             opts = [discord.SelectOption(label="None", value=NONE_VALUE, default=chosen == [])]
             opts.extend(discord.SelectOption(label=logic.truncate(r.name, 100), value=str(r.id),
                                              default=bool(chosen) and r.id in chosen) for r in roles)
-            select = discord.ui.Select(placeholder=f"{group.title()} roles (required, or None)", row=row,
+            select = discord.ui.Select(placeholder=f"{GROUP_LABELS[group]} roles (required, or None)", row=row,
                                        min_values=1, max_values=len(opts), options=opts)
             select.callback = self._group_callback(group)
             self.add_item(select)
@@ -894,8 +917,12 @@ class ReviewView(discord.ui.View):
         app = self.service.require(self.app_id)
         embed = discord.Embed(title=logic.truncate(f"Approve {app.nation_name}", 256),
                               colour=discord.Colour.blurple(),
-                              description="Choose the tracker region and group roles, then approve.")
+                              description="Choose the tracker region. Matching region and faith roles are "
+                                          "pre-selected; adjust them if needed, then approve.")
         embed.add_field(name="Region", value=logic.truncate(self.region or "Not chosen", 1024))
+        religions = logic.clean((app.submitted or {}).get("religions"))
+        if religions:
+            embed.add_field(name="Religions (from form)", value=logic.truncate(religions, 1024), inline=False)
         for group in GROUPS:
             chosen = self.choices[group]
             if not self.roles[group]:
@@ -904,7 +931,7 @@ class ReviewView(discord.ui.View):
                 value = "Not chosen"
             else:
                 value = role_mentions(chosen)
-            embed.add_field(name=f"{group.title()} roles", value=logic.truncate(value, 1024))
+            embed.add_field(name=f"{GROUP_LABELS[group]} roles", value=logic.truncate(value, 1024))
         embed.add_field(name="Next", inline=False,
                         value=f"<@{self.service.settings.population_approver_id}> is asked for population.")
         return embed
@@ -931,7 +958,19 @@ class ReviewView(discord.ui.View):
             self.region = self.custom_region
         else:
             self.region = self.regions[int(value)]
+        self._match_region_role()
         await self.refresh(interaction)
+
+    def _match_region_role(self) -> None:
+        if not self.region_auto or not self.region:
+            return
+        wanted = logic.clean(self.region).casefold()
+        match = [r.id for r in self.roles["continent"]
+                 if role_suffix(r.name, self.prefixes["continent"]) == wanted]
+        if match:
+            self.choices["continent"] = match[:1]
+        elif self.roles["continent"]:
+            self.choices["continent"] = None
 
     def _group_callback(self, group: str) -> Callable[[discord.Interaction], Awaitable[None]]:
         async def callback(interaction: discord.Interaction) -> None:
@@ -939,6 +978,8 @@ class ReviewView(discord.ui.View):
             if NONE_VALUE in values and len(values) > 1:
                 raise ActionError("Choose None on its own, or pick roles without None.")
             self.choices[group] = [] if NONE_VALUE in values else [int(v) for v in values]
+            if group == "continent":
+                self.region_auto = False
             await self.refresh(interaction)
         return callback
 

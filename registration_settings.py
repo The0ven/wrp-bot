@@ -42,10 +42,17 @@ class RegistrationSettings:
     max_upload_mb: int = 8
     tracker_url: str = ""
     tracker_token: str = ""
+    # Roles whose names start with these prefixes are offered in staff review automatically.
+    faith_role_prefix: str = "Faith:"
+    region_role_prefix: str = "Region:"
 
     @property
     def max_upload_bytes(self) -> int:
         return self.max_upload_mb * 1024 * 1024
+
+    @property
+    def group_role_prefixes(self) -> dict[str, str]:
+        return {"faith": self.faith_role_prefix, "continent": self.region_role_prefix}
 
     def system_role_id(self, system: str) -> int:
         return self.closed_role_id if system == "closed" else self.open_role_id
@@ -74,4 +81,6 @@ def load_settings() -> RegistrationSettings:
         max_upload_mb=_int("REGISTRATION_MAX_UPLOAD_MB", base.max_upload_mb),
         tracker_url=os.getenv("WRP_POPS_URL", "").strip().rstrip("/"),
         tracker_token=os.getenv("WRP_POPS_TOKEN", "").strip(),
+        faith_role_prefix=os.getenv("FAITH_ROLE_PREFIX", base.faith_role_prefix),
+        region_role_prefix=os.getenv("REGION_ROLE_PREFIX", base.region_role_prefix),
     )
